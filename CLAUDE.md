@@ -14,13 +14,16 @@ qola/
     variant_matrix.py              MHA variant expansion from manifest declarations
   cpp_itfs/
     qola_common.h                  QOLA_NS_BEGIN/END/NS() macros for namespace collision prevention
-    gemm_a4w4_asm.h                Args struct + C API for FP4 ASM GEMM
-    gemm_a4w4_asm.cu               Torch-free ASM GEMM implementation (raw HIP)
-    gemm_a4w4_blockscale.h         Args struct + C API for FP4 blockscale CK GEMM
-    gemm_a4w4_blockscale.cu        Torch-free CK GEMM dispatch + entry point
-    qola_gemm_a4w4_blockscale_common.cuh  Torch-free CK template wrapper (replaces AITER's torch version)
-    gen_blockscale_instances.py    Torch-free codegen for CK kernel instances
+    qola_gemm_a4w4_asm.h           Args struct + C API for FP4 ASM GEMM
+    qola_gemm_a4w4_asm.cu          Thin entry point — stubs → AITER's asm_gemm_a4w4.cu
+    qola_gemm_a4w4_blockscale.h    Args struct + C API for FP4 blockscale CK GEMM
+    qola_gemm_a4w4_blockscale.cu   Thin entry point — stubs → AITER's dispatch
     registry.toml                  Maps module names to cpp_itfs source replacements
+    torch_stubs/                   Minimal stub headers shadowing ATen/torch
+      ATen/ATen.h                  Stub Tensor, ScalarType, TORCH_CHECK, size_to_dim_
+      ATen/hip/HIPContext.h        Stub getCurrentHIPStream (thread-local hipStream_t)
+      ATen/hip/impl/...            Empty stubs for transitive includes
+      torch/extension.h            Forwards to stub ATen.h
   dispatch/
     gemm_a4w4_asm.py               Python dispatch: ctypes.CDLL + mangled symbol resolution
     gemm_a4w4_blockscale.py        Python dispatch for CK blockscale GEMM
@@ -78,17 +81,25 @@ docker exec <container> python -m qola.cli build \
   --mode cpp_itfs
 ```
 
-### CK module codegen (`gen_blockscale_instances.py`)
+### Stub torch headers (`torch_stubs/`)
 
-CK-based modules (like `gemm_a4w4_blockscale`) use compile-time template instantiation instead of runtime `.co` blob loading. AITER's `gen_instances.py` generates per-kernel `.cuh`/`.cpp` files with `torch::Tensor` signatures. QoLA ships its own `gen_blockscale_instances.py` that emits the same CK template instantiations but with raw-pointer function signatures (no torch dependency).
+CK-based modules (like `gemm_a4w4_blockscale`) use AITER's codegen and common headers unmodified. These headers `#include <ATen/ATen.h>` and use `torch::Tensor`, but the actual torch API surface is narrow: `data_ptr()`, `size()`, `stride()`, `dim()`, `sizes()`, `dtype()`, `TORCH_CHECK`, and `at::hip::getCurrentHIPStream()`.
 
-The registry's `blob_gen_cmd` field tells the build system to use QoLA's generator instead of AITER's. It is an eval-able f-string with `{QOLA_ROOT}` and `{AITER_CONFIGS.*}` available.
+QoLA provides minimal stub headers in `torch_stubs/` that implement this narrow surface. The stubs are placed first in the include path (`-I torch_stubs` before AITER's includes) so they shadow real torch headers. The stub `at::Tensor` carries pre-injected metadata (pointer, sizes, strides, dtype) — it does NOT manage storage, autograd, or device guards.
+
+The entry point (`gemm_a4w4_blockscale.cu`) constructs stub Tensors from the raw-pointer args struct, injects the caller's `hipStream_t` via `at::hip::qola_set_stream()`, and calls AITER's generated kernel functions directly.
+
+This approach eliminates per-module codegen duplication — when AITER updates kernel configs or CK templates, nothing changes on QoLA's side. The stubs cover the "narrow + zero" API tier (~44% of AITER kernels): kernels that only read tensor metadata and optionally zero output buffers.
 
 ## Adding a new cpp_itfs module
 
-1. Write `qola/cpp_itfs/<name>.h` (args struct) and `<name>.cu` (implementation). Include `qola_common.h` and use `QOLA_NS_BEGIN`/`QOLA_NS_END` for the namespace.
-2. Add an entry to `qola/cpp_itfs/registry.toml` mapping the `optCompilerConfig.json` module name to the new sources.
-3. Optionally add a Python dispatch wrapper in `qola/dispatch/`.
+### Adding a new module (stub approach)
+
+1. Write `qola/cpp_itfs/<name>.h` (args struct + C API). Include `qola_common.h`, use `QOLA_NS_BEGIN`/`QOLA_NS_END`.
+2. Write `qola/cpp_itfs/qola_<name>.cu` — the thin entry point (~30 lines). It constructs stub `at::Tensor` objects from the args struct, calls `at::hip::qola_set_stream(stream)`, and invokes AITER's function. Prefix filename with `qola_` to avoid `.o` name collision with AITER's source of the same name. Follow `qola_gemm_a4w4_blockscale.cu` or `qola_gemm_a4w4_asm.cu` as examples.
+3. Add a registry entry in `registry.toml`. Only drop the pybind entry point — keep AITER's dispatch `.cu` files. Include `torch_stubs` first in `add_includes`.
+4. Verify the module's torch API surface stays within the stub's support (see `torch_stubs/ATen/ATen.h`).
+5. Optionally add a Python dispatch wrapper in `qola/dispatch/`.
 
 ## Dependencies
 
