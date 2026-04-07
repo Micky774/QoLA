@@ -11,4 +11,3 @@ name = "module_gemm_a4w4_asm"
 
 [[modules]]
 name = "module_gemm_a4w4_blockscale"
-mode = "pybind"  # no cpp_itfs variant yet; CK templates depend on torch types
