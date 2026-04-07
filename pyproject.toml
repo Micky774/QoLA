@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qola"
+version = "0.1.0"
+description = "Ahead-Of-Time AITER kernel builder"
+requires-python = ">=3.10"
+dependencies = [
+    "tomli ; python_version < '3.11'",
+    "packaging",
+]
+
+[project.scripts]
+qola = "qola.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qola*"]
