@@ -1,0 +1,15 @@
+# QoLA cpp_itfs source registry.
+#
+# Maps optCompilerConfig module names to the source replacements needed
+# when building in cpp_itfs (torch-free) mode.
+#
+# For each module:
+#   drop_srcs    - basenames of pybind sources to remove from the
+#                  optCompilerConfig srcs list.
+#   add_srcs     - QoLA cpp_itfs source files to add (relative to QoLA root).
+#   add_includes - extra include directories (relative to QoLA root).
+
+[module_gemm_a4w4_asm]
+drop_srcs    = ["pybind/gemm_a4w4_asm_pybind.cu", "py_itfs_cu/asm_gemm_a4w4.cu"]
+add_srcs     = ["qola/cpp_itfs/gemm_a4w4_asm.cu"]
+add_includes = ["qola/cpp_itfs"]

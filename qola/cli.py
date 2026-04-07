@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""AOTA command-line interface."""
+"""QoLA command-line interface."""
 
 from __future__ import annotations
 
@@ -32,6 +32,11 @@ def main(argv: list[str] | None = None) -> int:
         help="GPU arch target (e.g. gfx942). Repeatable.",
     )
     build_p.add_argument(
+        "--mode", choices=["pybind", "cpp_itfs"], default="pybind",
+        help="Build mode: 'pybind' (torch-enabled Python modules, default) "
+             "or 'cpp_itfs' (torch-free C-linkable shared libraries).",
+    )
+    build_p.add_argument(
         "--verbose", "-v", action="store_true",
     )
 
@@ -46,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             archs=args.archs,
             verbose=args.verbose,
+            build_mode=args.mode,
         )
         s = result["summary"]
         print(f"Build complete: {s['success']}/{s['total']} succeeded"
