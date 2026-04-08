@@ -23,3 +23,17 @@ add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
 drop_srcs    = ["pybind/gemm_a4w4_blockscale_pybind.cu"]
 add_srcs     = ["qola/cpp_itfs/qola_gemm_a4w4_blockscale.cu"]
 add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
+
+# MHA modules are already torch-free (torch_exclude=true, is_python_module=false
+# in optCompilerConfig).  No pybind sources to drop, no torch_stubs needed.
+# The wrapper only adds namespace guarding.
+
+[libmha_fwd]
+drop_srcs    = []
+add_srcs     = ["qola/cpp_itfs/qola_mha_fwd.cu"]
+add_includes = ["qola/cpp_itfs"]
+
+[libmha_bwd]
+drop_srcs    = []
+add_srcs     = ["qola/cpp_itfs/qola_mha_bwd.cu"]
+add_includes = ["qola/cpp_itfs"]

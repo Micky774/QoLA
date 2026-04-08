@@ -11,3 +11,9 @@ name = "module_gemm_a4w4_asm"
 
 [[modules]]
 name = "module_gemm_a4w4_blockscale"
+
+[[modules]]
+name = "libmha_fwd"
+
+[[modules]]
+name = "libmha_bwd"
