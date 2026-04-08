@@ -58,6 +58,8 @@ The manifest's `[qola] namespace = "te"` causes:
 
 Use `QOLA_NS(sym)` macro in C++ to reference the correctly-namespaced symbol.
 
+Namespace wrappers alone are not sufficient — AITER headers like `mha_fwd.h` declare functions with explicit `__attribute__((visibility("default")))`, which overrides `-fvisibility=hidden` and would leak `aiter::*` symbols into the final `.so`. All cpp_itfs modules **must** be linked with `qola_exports.lds` (`-Wl,--version-script,qola/cpp_itfs/qola_exports.lds`) to force all non-`qola::*` symbols local. The `[defaults]` section in `registry.toml` specifies this version script.
+
 ### Python dispatch (`dispatch/`)
 
 Loads the cpp_itfs `.so` via `ctypes.CDLL(path, RTLD_GLOBAL)` and resolves the C++ symbol by its Itanium ABI mangled name (same pattern as jax-aiter's `ffi/registry.py`). For production TE integration, prefer CMake-time linking into `libtransformer_engine.so` (like `ck_fused_attn` links `libmha_fwd.so`).

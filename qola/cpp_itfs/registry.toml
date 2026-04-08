@@ -13,6 +13,16 @@
 # AITER's dispatch .cu files and codegen output are kept in the source list
 # and compiled against QoLA's stub torch headers.  Only the pybind entry
 # points are dropped.
+#
+# All cpp_itfs modules MUST be linked with qola_exports.lds to hide
+# AITER-internal symbols.  Some AITER headers (e.g. mha_fwd.h) declare
+# functions with explicit visibility("default"), which would otherwise
+# leak into the final .so and collide if multiple AITER-backed libraries
+# coexist in one process.  The version script ensures only qola::*
+# symbols are exported.
+
+[defaults]
+version_script = "qola/cpp_itfs/qola_exports.lds"
 
 [module_gemm_a4w4_asm]
 drop_srcs    = ["pybind/gemm_a4w4_asm_pybind.cu"]
