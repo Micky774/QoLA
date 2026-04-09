@@ -1,6 +1,6 @@
 [qola]
-aiter_commit = "d32b0cb62ecc32bb1a858e8437d58eb9b3856af6"    # pinned AITER submodule commit
-rocm_versions = ["7.1"]
+aiter_commit = "1ead651f826137a3cd327a24fa7d8103f94ae70c"    # pinned AITER submodule commit
+rocm_versions = ["7.2"]
 
 [build]
 architectures = ["gfx950"]

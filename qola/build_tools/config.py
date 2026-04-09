@@ -138,23 +138,16 @@ def load_manifest(
     has_static_fwd = "libmha_fwd" in module_names
     has_static_bwd = "libmha_bwd" in module_names
 
-    # Pre-compute variant filters once if needed.
-    fwd_filters: List[Dict[str, Any]] = []
-    bwd_filters: List[Dict[str, Any]] = []
-    if has_fwd_variants and has_static_fwd:
-        from .variant_matrix import compute_mha_fwd_filters
-
-        fwd_filters = compute_mha_fwd_filters(fwd_section, ns)
-
-    if has_bwd_variants and has_static_bwd:
-        from .variant_matrix import compute_mha_bwd_filters
-
-        bwd_filters = compute_mha_bwd_filters(bwd_section, ns)
-
     # Keys consumed by load_manifest before passing to _resolve_static_module.
     _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions"}
 
     # --- static modules ---
+    # NOTE: Variant filtering is NOT applied to static libmha_fwd /
+    # libmha_bwd modules.  CK's generate.py produces both instance .cpp
+    # files and the dispatch API file (fmha_*_api.cpp) on every call.
+    # Running it N times with different --filter patterns overwrites the
+    # API dispatch, leaving only the last filter's branches.  Until we
+    # add an API-regen step, static libmha modules run unfiltered.
     for mod_entry in manifest.get("modules", []):
         name = mod_entry["name"]
         mod_mode = mod_entry.get("mode", global_mode)
@@ -167,11 +160,6 @@ def load_manifest(
             spec.srcs = [s for s in spec.srcs if os.path.basename(s) not in drop_srcs]
         if drop_directions:
             _drop_blob_directions(spec, drop_directions)
-
-        if name == "libmha_fwd" and fwd_filters:
-            _apply_mha_variant_filter(spec, name, fwd_filters, ns)
-        elif name == "libmha_bwd" and bwd_filters:
-            _apply_mha_variant_filter(spec, name, bwd_filters, ns)
 
         if mod_mode == "cpp_itfs":
             _apply_cpp_itfs(spec, name)
@@ -250,6 +238,7 @@ def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
     ]
 
 
+
 # Directions in blob_gen_cmd that should be filtered per-variant.
 _MHA_FWD_FILTERED_DIRS = {"fwd"}
 _MHA_BWD_FILTERED_DIRS = {"bwd"}
@@ -262,20 +251,21 @@ def _apply_mha_variant_filter(
     spec: BuildSpec,
     module_name: str,
     mha_filters: List[Dict[str, Any]],
-    ns: "AiterNamespace",
 ) -> None:
     """Replace unfiltered ``blob_gen_cmd`` with per-variant filtered commands.
 
     For each CK codegen direction that supports variant filtering (``fwd``
     for libmha_fwd, ``bwd`` for libmha_bwd), the single unfiltered
     ``generate.py`` invocation is replaced with N invocations — one per
-    ``[[mha_variants]]`` entry — each carrying the variant's ``--filter``
-    and ``--receipt``.
+    variant — each carrying the variant's ``--filter``.
 
-    Directions that don't support variant filtering (``fwd_splitkv``,
-    ``batch_prefill``) are kept unchanged.  All invocations write to the
-    same ``--output_dir``, so CK template instances from different
-    variants are compiled together into a single ``.so``.
+    .. warning::
+
+       This must NOT be used for static libmha modules (receipt 600).
+       CK's ``generate.py`` regenerates the dispatch API file on every
+       call, so running it N times with different filters overwrites
+       the API dispatch.  Use only for pybind per-variant expansion
+       where each variant is a separate ``.so``.
     """
     filtered_dirs = (
         _MHA_FWD_FILTERED_DIRS
@@ -295,13 +285,9 @@ def _apply_mha_variant_filter(
         direction = m.group(1) if m else None
 
         if direction not in filtered_dirs:
-            # Keep unfiltered (splitkv, batch_prefill, etc.)
             new_cmds.append(cmd)
             continue
 
-        # Replace with one filtered invocation per variant.
-        # Preserve the original command's --receipt (e.g. 600 for libmha_*)
-        # and only append --filter.
         for vf in mha_filters:
             new_cmds.append(f"{cmd} --filter {vf['filter']}")
 

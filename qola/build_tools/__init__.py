@@ -89,6 +89,9 @@ def build_kernels(
     _copy_tuning_csvs(ns, configs_dir)
     _copy_asm_blobs(ns, asm_dir)
 
+    # 4b. Generate embedded HSA header.
+    _generate_embedded_hsa(ns, output_dir, archs or [], specs)
+
     # 5. Build each module
     results: list[dict[str, Any]] = []
     for spec in specs:
@@ -160,6 +163,46 @@ def _invoke_build(build_module_fn, spec: BuildSpec, verbose: bool) -> None:
                 os.environ["HIP_CLANG_PATH"] = prev_clang
             else:
                 os.environ.pop("HIP_CLANG_PATH", None)
+
+
+def _generate_embedded_hsa(
+    ns: AiterNamespace,
+    output_dir: str,
+    archs: List[str],
+    specs: List[BuildSpec],
+) -> None:
+    """Generate an embedded HSA header and inject compile flags into *specs*.
+
+    Scans ``{aiter_root}/hsa/{arch}/fmha_v3_fwd`` and
+    ``{arch}/fmha_v3_bwd`` for ``.co`` blobs, generates a C++ header
+    embedding them as byte arrays, and adds the necessary
+    ``-DAITER_EMBEDDED_HSA_HEADER`` flag and include path to every spec.
+    """
+    from .generate_embedded_hsa import generate_embedded_hsa_header
+
+    hsa_dir = Path(os.path.join(ns.AITER_META_DIR, "hsa"))
+    header_dir = os.path.join(output_dir, "_embedded_hsa")
+    header_path = os.path.join(header_dir, "aiter_embedded_hsa.h")
+
+    # Determine subdirs from architectures.
+    subdirs: List[str] = []
+    for arch in archs:
+        for kernel_type in ("fmha_v3_fwd", "fmha_v3_bwd"):
+            subdir = f"{arch}/{kernel_type}"
+            if (hsa_dir / subdir).is_dir():
+                subdirs.append(subdir)
+
+    if not subdirs:
+        print("[QoLA] --embed-hsa: no HSA subdirs found, skipping.")
+        return
+
+    count = generate_embedded_hsa_header(hsa_dir, Path(header_path), subdirs)
+    print(f"[QoLA] Embedded {count} HSA .co files into {header_path}")
+
+    # Inject compile flags into every spec.
+    for spec in specs:
+        spec.flags_extra_cc.append(f"-DAITER_EMBEDDED_HSA_HEADER='\"aiter_embedded_hsa.h\"'")
+        spec.extra_include.insert(0, header_dir)
 
 
 def _copy_tuning_csvs(ns: AiterNamespace, dst: str) -> None:
