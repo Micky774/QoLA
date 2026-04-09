@@ -101,9 +101,15 @@ def load_manifest(
         name = "module_gemm_a4w4_asm"
         mode = "pybind"                   # optional per-module override
 
-        [[mha_variants]]
-        dtype = "bf16"
-        use_mask = true
+        # Separate fwd/bwd variant sections (different option spaces):
+        [[mha_fwd_variants]]
+        dtype = ["bf16", "fp16"]
+        return_lse = true
+        ...
+
+        [[mha_bwd_variants]]
+        dtype = ["bf16", "fp16"]
+        has_dropout = false
         ...
     """
     with open(manifest_path, "rb") as f:
@@ -119,31 +125,53 @@ def load_manifest(
     namespace = manifest.get("qola", {}).get("namespace", "")
 
     specs: List[BuildSpec] = []
-    mha_section = manifest.get("mha_variants", [])
+    fwd_section = manifest.get("mha_fwd_variants", [])
+    bwd_section = manifest.get("mha_bwd_variants", [])
     module_names = {m["name"] for m in manifest.get("modules", [])}
 
-    # Determine whether [[mha_variants]] filters are consumed by static
+    has_fwd_variants = bool(fwd_section)
+    has_bwd_variants = bool(bwd_section)
+
+    # Determine whether variant filters are consumed by static
     # libmha_fwd/libmha_bwd modules (combined filter into one .so) or
-    # expanded as separate pybind modules.
-    _MHA_LIB_MODULES = {"libmha_fwd", "libmha_bwd"}
-    mha_consumed_by_static = bool(mha_section and (module_names & _MHA_LIB_MODULES))
+    # expanded as separate pybind modules (fwd only).
+    has_static_fwd = "libmha_fwd" in module_names
+    has_static_bwd = "libmha_bwd" in module_names
 
     # Pre-compute variant filters once if needed.
-    mha_filters: List[Dict[str, Any]] = []
-    if mha_consumed_by_static:
-        from .variant_matrix import compute_mha_variant_filters
+    fwd_filters: List[Dict[str, Any]] = []
+    bwd_filters: List[Dict[str, Any]] = []
+    if has_fwd_variants and has_static_fwd:
+        from .variant_matrix import compute_mha_fwd_filters
 
-        mha_filters = compute_mha_variant_filters(mha_section, ns)
+        fwd_filters = compute_mha_fwd_filters(fwd_section, ns)
+
+    if has_bwd_variants and has_static_bwd:
+        from .variant_matrix import compute_mha_bwd_filters
+
+        bwd_filters = compute_mha_bwd_filters(bwd_section, ns)
+
+    # Keys consumed by load_manifest before passing to _resolve_static_module.
+    _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions"}
 
     # --- static modules ---
     for mod_entry in manifest.get("modules", []):
         name = mod_entry["name"]
         mod_mode = mod_entry.get("mode", global_mode)
-        overrides = {k: v for k, v in mod_entry.items() if k not in ("name", "mode")}
+        drop_srcs = set(mod_entry.get("drop_srcs", []))
+        drop_directions = set(mod_entry.get("drop_directions", []))
+        overrides = {k: v for k, v in mod_entry.items() if k not in _MANIFEST_KEYS}
         spec = _resolve_static_module(name, config_json_path, eval_globals, overrides)
 
-        if mha_filters and name in _MHA_LIB_MODULES:
-            _apply_mha_variant_filter(spec, name, mha_filters, ns)
+        if drop_srcs:
+            spec.srcs = [s for s in spec.srcs if os.path.basename(s) not in drop_srcs]
+        if drop_directions:
+            _drop_blob_directions(spec, drop_directions)
+
+        if name == "libmha_fwd" and fwd_filters:
+            _apply_mha_variant_filter(spec, name, fwd_filters, ns)
+        elif name == "libmha_bwd" and bwd_filters:
+            _apply_mha_variant_filter(spec, name, bwd_filters, ns)
 
         if mod_mode == "cpp_itfs":
             _apply_cpp_itfs(spec, name)
@@ -154,14 +182,14 @@ def load_manifest(
 
         specs.append(spec)
 
-    # --- MHA variants (pybind per-variant expansion) ---
-    # Only expand as separate pybind modules when libmha_fwd/bwd are NOT
-    # declared as static modules — otherwise the variants are already
-    # folded into the static entries above.
-    if mha_section and not mha_consumed_by_static:
+    # --- MHA variants (pybind per-variant expansion, fwd only) ---
+    # Only expand as separate pybind modules when libmha_fwd is NOT
+    # declared as a static module — otherwise the variants are already
+    # folded into the static entry above.
+    if has_fwd_variants and not has_static_fwd:
         from .variant_matrix import expand_mha_variants
 
-        mha_specs = expand_mha_variants(mha_section, ns)
+        mha_specs = expand_mha_variants(fwd_section, ns)
         if namespace:
             for spec in mha_specs:
                 spec.md_name = f"{namespace}_{spec.md_name}"
@@ -207,6 +235,19 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
 
     spec.torch_exclude = True
     spec.is_python_module = False
+
+
+def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
+    """Remove ``blob_gen_cmd`` entries whose ``-d <direction>`` is in *drop_directions*."""
+    old_cmds: List[str] = (
+        spec.blob_gen_cmd
+        if isinstance(spec.blob_gen_cmd, list)
+        else [spec.blob_gen_cmd] if spec.blob_gen_cmd else []
+    )
+    spec.blob_gen_cmd = [
+        cmd for cmd in old_cmds
+        if not ((m := _DIR_RE.search(cmd)) and m.group(1) in drop_directions)
+    ]
 
 
 # Directions in blob_gen_cmd that should be filtered per-variant.
@@ -259,11 +300,10 @@ def _apply_mha_variant_filter(
             continue
 
         # Replace with one filtered invocation per variant.
+        # Preserve the original command's --receipt (e.g. 600 for libmha_*)
+        # and only append --filter.
         for vf in mha_filters:
-            # Strip any existing --receipt from the original command and
-            # inject the variant's receipt + filter.
-            base = re.sub(r"--receipt\s+\S+", "", cmd).rstrip()
-            new_cmds.append(f"{base} --receipt {vf['receipt']} --filter {vf['filter']}")
+            new_cmds.append(f"{cmd} --filter {vf['filter']}")
 
     spec.blob_gen_cmd = new_cmds
 
