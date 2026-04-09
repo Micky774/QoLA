@@ -7,10 +7,9 @@
 
 QOLA_NS_BEGIN
 
-float mha_bwd(const aiter::mha_bwd_args& args, hipStream_t stream)
+float mha_bwd(const aiter::mha_bwd_args& args, const ck_tile::stream_config& stream_config)
 {
-    const ck_tile::stream_config s{stream};
-    return ::aiter::mha_bwd(args, s);
+    return ::aiter::mha_bwd(args, stream_config);
 }
 
 QOLA_NS_END

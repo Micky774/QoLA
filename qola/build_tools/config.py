@@ -132,9 +132,6 @@ def load_manifest(
     has_fwd_variants = bool(fwd_section)
     has_bwd_variants = bool(bwd_section)
 
-    # Determine whether variant filters are consumed by static
-    # libmha_fwd/libmha_bwd modules (combined filter into one .so) or
-    # expanded as separate pybind modules (fwd only).
     has_static_fwd = "libmha_fwd" in module_names
     has_static_bwd = "libmha_bwd" in module_names
 
@@ -146,8 +143,7 @@ def load_manifest(
     # libmha_bwd modules.  CK's generate.py produces both instance .cpp
     # files and the dispatch API file (fmha_*_api.cpp) on every call.
     # Running it N times with different --filter patterns overwrites the
-    # API dispatch, leaving only the last filter's branches.  Until we
-    # add an API-regen step, static libmha modules run unfiltered.
+    # API dispatch, leaving only the last filter's branches.
     for mod_entry in manifest.get("modules", []):
         name = mod_entry["name"]
         mod_mode = mod_entry.get("mode", global_mode)
@@ -223,6 +219,15 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
 
     spec.torch_exclude = True
     spec.is_python_module = False
+
+    # Apply default linker flags (e.g. version script to hide aiter:: symbols).
+    defaults = src_map.get("defaults", {})
+    vs = defaults.get("version_script")
+    if vs:
+        vs_path = os.path.join(_QOLA_ROOT, vs)
+        if spec.extra_ldflags is None:
+            spec.extra_ldflags = []
+        spec.extra_ldflags.append(f"-Wl,--version-script,{vs_path}")
 
 
 def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
