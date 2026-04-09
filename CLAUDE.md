@@ -7,7 +7,7 @@ Manifest-driven ahead-of-time builder for AITER kernels. Wraps AITER's `build_mo
 ```
 qola/
   cli.py                          CLI entry point (qola build)
-  build/
+  build_tools/
     __init__.py                    Orchestrator: build_kernels()
     config.py                      TOML manifest parsing, BuildSpec, cpp_itfs source mapping
     resolver.py                    Reconstructs AITER's eval namespace without `import aiter`
@@ -18,6 +18,11 @@ qola/
     qola_gemm_a4w4_asm.cu          Thin entry point — stubs → AITER's asm_gemm_a4w4.cu
     qola_gemm_a4w4_blockscale.h    Args struct + C API for FP4 blockscale CK GEMM
     qola_gemm_a4w4_blockscale.cu   Thin entry point — stubs → AITER's dispatch
+    qola_mha_fwd.h                 Namespace wrapper for AITER's mha_fwd
+    qola_mha_fwd.cu                Thin entry point — delegates to aiter::mha_fwd()
+    qola_mha_bwd.h                 Namespace wrapper for AITER's mha_bwd
+    qola_mha_bwd.cu                Thin entry point — delegates to aiter::mha_bwd()
+    qola_exports.lds               Linker version script — exports only qola::* symbols
     registry.toml                  Maps module names to cpp_itfs source replacements
     torch_stubs/                   Minimal stub headers shadowing ATen/torch
       ATen/ATen.h                  Stub Tensor, ScalarType, TORCH_CHECK, size_to_dim_

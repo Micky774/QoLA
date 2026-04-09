@@ -17,3 +17,23 @@ name = "libmha_fwd"
 
 [[modules]]
 name = "libmha_bwd"
+
+# MHA variant declarations.  When libmha_fwd/libmha_bwd are listed above,
+# these filter CK codegen to only generate the requested variants (combined
+# into a single .so per direction).  Without libmha_fwd/bwd in [[modules]],
+# each variant would instead produce its own pybind .so.
+#
+# Options can be scalars, lists, or omitted:
+#   scalar       → single value
+#   list         → all listed values (cartesian product with other options)
+#   omitted      → all available values for that option
+#
+# Duplicates from the cartesian product (e.g. has_bias/has_alibi
+# interaction) are automatically deduplicated.
+[[mha_variants]]
+dtype = ["bf16", "fp16"]           # both dtypes
+use_mask = true
+return_lse = true
+dropout_zero = true
+skip_zero = true
+has_qscale = true

@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "build":
-        from .build import build_kernels
+        from .build_tools import build_kernels
 
         result = build_kernels(
             manifest_path=args.manifest,

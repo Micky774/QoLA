@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -118,6 +119,21 @@ def load_manifest(
     namespace = manifest.get("qola", {}).get("namespace", "")
 
     specs: List[BuildSpec] = []
+    mha_section = manifest.get("mha_variants", [])
+    module_names = {m["name"] for m in manifest.get("modules", [])}
+
+    # Determine whether [[mha_variants]] filters are consumed by static
+    # libmha_fwd/libmha_bwd modules (combined filter into one .so) or
+    # expanded as separate pybind modules.
+    _MHA_LIB_MODULES = {"libmha_fwd", "libmha_bwd"}
+    mha_consumed_by_static = bool(mha_section and (module_names & _MHA_LIB_MODULES))
+
+    # Pre-compute variant filters once if needed.
+    mha_filters: List[Dict[str, Any]] = []
+    if mha_consumed_by_static:
+        from .variant_matrix import compute_mha_variant_filters
+
+        mha_filters = compute_mha_variant_filters(mha_section, ns)
 
     # --- static modules ---
     for mod_entry in manifest.get("modules", []):
@@ -125,6 +141,9 @@ def load_manifest(
         mod_mode = mod_entry.get("mode", global_mode)
         overrides = {k: v for k, v in mod_entry.items() if k not in ("name", "mode")}
         spec = _resolve_static_module(name, config_json_path, eval_globals, overrides)
+
+        if mha_filters and name in _MHA_LIB_MODULES:
+            _apply_mha_variant_filter(spec, name, mha_filters, ns)
 
         if mod_mode == "cpp_itfs":
             _apply_cpp_itfs(spec, name)
@@ -135,9 +154,11 @@ def load_manifest(
 
         specs.append(spec)
 
-    # --- MHA variants ---
-    mha_section = manifest.get("mha_variants", [])
-    if mha_section:
+    # --- MHA variants (pybind per-variant expansion) ---
+    # Only expand as separate pybind modules when libmha_fwd/bwd are NOT
+    # declared as static modules — otherwise the variants are already
+    # folded into the static entries above.
+    if mha_section and not mha_consumed_by_static:
         from .variant_matrix import expand_mha_variants
 
         mha_specs = expand_mha_variants(mha_section, ns)
@@ -184,6 +205,65 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
 
     spec.torch_exclude = True
     spec.is_python_module = False
+
+
+# Directions in blob_gen_cmd that should be filtered per-variant.
+_MHA_FWD_FILTERED_DIRS = {"fwd"}
+_MHA_BWD_FILTERED_DIRS = {"bwd"}
+
+# Regex to extract the ``-d <direction>`` from a generate.py command.
+_DIR_RE = re.compile(r"-d\s+(\S+)")
+
+
+def _apply_mha_variant_filter(
+    spec: BuildSpec,
+    module_name: str,
+    mha_filters: List[Dict[str, Any]],
+    ns: "AiterNamespace",
+) -> None:
+    """Replace unfiltered ``blob_gen_cmd`` with per-variant filtered commands.
+
+    For each CK codegen direction that supports variant filtering (``fwd``
+    for libmha_fwd, ``bwd`` for libmha_bwd), the single unfiltered
+    ``generate.py`` invocation is replaced with N invocations — one per
+    ``[[mha_variants]]`` entry — each carrying the variant's ``--filter``
+    and ``--receipt``.
+
+    Directions that don't support variant filtering (``fwd_splitkv``,
+    ``batch_prefill``) are kept unchanged.  All invocations write to the
+    same ``--output_dir``, so CK template instances from different
+    variants are compiled together into a single ``.so``.
+    """
+    filtered_dirs = (
+        _MHA_FWD_FILTERED_DIRS if module_name == "libmha_fwd"
+        else _MHA_BWD_FILTERED_DIRS
+    )
+
+    old_cmds: List[str] = (
+        spec.blob_gen_cmd if isinstance(spec.blob_gen_cmd, list)
+        else [spec.blob_gen_cmd] if spec.blob_gen_cmd else []
+    )
+
+    new_cmds: List[str] = []
+    for cmd in old_cmds:
+        m = _DIR_RE.search(cmd)
+        direction = m.group(1) if m else None
+
+        if direction not in filtered_dirs:
+            # Keep unfiltered (splitkv, batch_prefill, etc.)
+            new_cmds.append(cmd)
+            continue
+
+        # Replace with one filtered invocation per variant.
+        for vf in mha_filters:
+            # Strip any existing --receipt from the original command and
+            # inject the variant's receipt + filter.
+            base = re.sub(r"--receipt\s+\S+", "", cmd).rstrip()
+            new_cmds.append(
+                f"{base} --receipt {vf['receipt']} --filter {vf['filter']}"
+            )
+
+    spec.blob_gen_cmd = new_cmds
 
 
 def _resolve_static_module(
