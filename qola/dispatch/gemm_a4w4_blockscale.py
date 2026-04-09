@@ -17,8 +17,8 @@ from typing import Optional
 
 import torch
 
-
 # ---- C struct mirroring qola::gemm_a4w4_blockscale_args ----
+
 
 class _GemmA4W4BlockscaleArgs(ctypes.Structure):
     _fields_ = [

@@ -17,8 +17,8 @@ from typing import Optional
 
 import torch
 
-
 # ---- C struct mirroring qola::gemm_a4w4_asm_args ----
+
 
 class _GemmA4W4AsmArgs(ctypes.Structure):
     _fields_ = [

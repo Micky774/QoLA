@@ -16,28 +16,40 @@ def main(argv: list[str] | None = None) -> int:
 
     build_p = sub.add_parser("build", help="Build kernels from a manifest")
     build_p.add_argument(
-        "--manifest", "-m", required=True,
+        "--manifest",
+        "-m",
+        required=True,
         help="Path to the TOML consumer manifest",
     )
     build_p.add_argument(
-        "--aiter-root", "-a", required=True,
+        "--aiter-root",
+        "-a",
+        required=True,
         help="Path to the AITER source tree root",
     )
     build_p.add_argument(
-        "--output-dir", "-o", required=True,
+        "--output-dir",
+        "-o",
+        required=True,
         help="Structured output directory",
     )
     build_p.add_argument(
-        "--arch", action="append", dest="archs",
+        "--arch",
+        action="append",
+        dest="archs",
         help="GPU arch target (e.g. gfx942). Repeatable.",
     )
     build_p.add_argument(
-        "--mode", choices=["pybind", "cpp_itfs"], default="pybind",
+        "--mode",
+        choices=["pybind", "cpp_itfs"],
+        default="pybind",
         help="Build mode: 'pybind' (torch-enabled Python modules, default) "
-             "or 'cpp_itfs' (torch-free C-linkable shared libraries).",
+        "or 'cpp_itfs' (torch-free C-linkable shared libraries).",
     )
     build_p.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
     )
 
     args = parser.parse_args(argv)
@@ -54,8 +66,10 @@ def main(argv: list[str] | None = None) -> int:
             build_mode=args.mode,
         )
         s = result["summary"]
-        print(f"Build complete: {s['success']}/{s['total']} succeeded"
-              f", {s['failed']} failed.")
+        print(
+            f"Build complete: {s['success']}/{s['total']} succeeded"
+            f", {s['failed']} failed."
+        )
         if s["failed"]:
             for r in result["modules"]:
                 if not r["success"]:

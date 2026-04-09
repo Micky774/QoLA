@@ -200,7 +200,9 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
         spec.srcs.append(os.path.join(_QOLA_ROOT, src))
 
     # Prepend cpp_itfs include directories (order matters — stubs first).
-    new_includes = [os.path.join(_QOLA_ROOT, inc) for inc in mapping.get("add_includes", [])]
+    new_includes = [
+        os.path.join(_QOLA_ROOT, inc) for inc in mapping.get("add_includes", [])
+    ]
     spec.extra_include = new_includes + spec.extra_include
 
     spec.torch_exclude = True
@@ -235,12 +237,14 @@ def _apply_mha_variant_filter(
     variants are compiled together into a single ``.so``.
     """
     filtered_dirs = (
-        _MHA_FWD_FILTERED_DIRS if module_name == "libmha_fwd"
+        _MHA_FWD_FILTERED_DIRS
+        if module_name == "libmha_fwd"
         else _MHA_BWD_FILTERED_DIRS
     )
 
     old_cmds: List[str] = (
-        spec.blob_gen_cmd if isinstance(spec.blob_gen_cmd, list)
+        spec.blob_gen_cmd
+        if isinstance(spec.blob_gen_cmd, list)
         else [spec.blob_gen_cmd] if spec.blob_gen_cmd else []
     )
 
@@ -259,9 +263,7 @@ def _apply_mha_variant_filter(
             # Strip any existing --receipt from the original command and
             # inject the variant's receipt + filter.
             base = re.sub(r"--receipt\s+\S+", "", cmd).rstrip()
-            new_cmds.append(
-                f"{base} --receipt {vf['receipt']} --filter {vf['filter']}"
-            )
+            new_cmds.append(f"{base} --receipt {vf['receipt']} --filter {vf['filter']}")
 
     spec.blob_gen_cmd = new_cmds
 
@@ -277,9 +279,7 @@ def _resolve_static_module(
         all_entries: dict = json.load(f)
 
     if op_name not in all_entries:
-        raise ValueError(
-            f"Module '{op_name}' not found in optCompilerConfig.json"
-        )
+        raise ValueError(f"Module '{op_name}' not found in optCompilerConfig.json")
     raw = dict(all_entries[op_name])
     raw.update(overrides)
     return _eval_entry(op_name, raw, eval_globals)

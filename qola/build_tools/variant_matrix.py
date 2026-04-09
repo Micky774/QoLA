@@ -19,21 +19,23 @@ from typing import Any, Dict, List
 from .config import BuildSpec, _eval_entry
 from .resolver import AiterNamespace, make_eval_globals
 
-
 # Full value space for each MHA variant option.  When an option is
 # omitted from a ``[[mha_variants]]`` entry, all values listed here
 # are included in the cartesian product.
 _MHA_OPTION_SPACE: Dict[str, list] = {
-    "dtype": ["bf16", "fp16"],
-    "logits_positive": [False, True],
-    "has_bias": [False, True],
-    "has_alibi": [False, True],
-    "use_mask": [False, True],
-    "return_lse": [False, True],
-    "dropout_zero": [True, False],
-    "skip_zero": [True, False],
-    "has_qscale": [True, False],
+    k: [False, True]
+    for k in (
+        "logits_positive",
+        "has_bias",
+        "has_alibi",
+        "use_mask",
+        "return_lse",
+        "dropout_zero",
+        "skip_zero",
+        "has_qscale",
+    )
 }
+_MHA_OPTION_SPACE |= {"dtype": ["bf16", "fp16"]}
 
 _MHA_OPTION_KEYS = list(_MHA_OPTION_SPACE.keys())
 
@@ -96,13 +98,13 @@ def _expand_variants_cartesian(
             if filter_pattern in seen_filters:
                 continue
             seen_filters.add(filter_pattern)
-
-            results.append({
-                "suffix": suffix,
-                "filter": filter_pattern,
-                "receipt": receipt,
-            })
-
+            results.append(
+                {
+                    "suffix": suffix,
+                    "filter": filter_pattern,
+                    "receipt": receipt,
+                }
+            )
     return results
 
 
@@ -151,9 +153,7 @@ def expand_mha_variants(
     eval_globals = make_eval_globals(ns)
     base = _eval_entry("module_mha_varlen_fwd", base_raw, eval_globals)
 
-    gen_py = os.path.join(
-        ns.CK_DIR, "example", "ck_tile", "01_fmha", "generate.py"
-    )
+    gen_py = os.path.join(ns.CK_DIR, "example", "ck_tile", "01_fmha", "generate.py")
 
     results: List[BuildSpec] = []
     for vf in variants:
