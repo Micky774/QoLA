@@ -55,10 +55,12 @@ _DEFAULTS: dict[str, Any] = {
 
 # QoLA root directory (one level above this file's package).
 _QOLA_ROOT = str(Path(__file__).resolve().parent.parent.parent)
+_CPP_ITFS_DIR = os.path.join(_QOLA_ROOT, "qola", "cpp_itfs")
 
 # Registry of cpp_itfs source replacements, loaded from the external TOML file
 # so that new modules can be added without touching Python code.
-_CPP_ITFS_REGISTRY = os.path.join(_QOLA_ROOT, "qola", "cpp_itfs", "registry.toml")
+_CPP_ITFS_REGISTRY = os.path.join(_CPP_ITFS_DIR, "registry.toml")
+_QOLA_CONFIG_HEADER = os.path.join(_CPP_ITFS_DIR, "qola_config.h")
 
 
 def _load_cpp_itfs_src_map() -> Dict[str, Dict[str, List[str]]]:
@@ -158,11 +160,10 @@ def load_manifest(
             _drop_blob_directions(spec, drop_directions)
 
         if mod_mode == "cpp_itfs":
-            _apply_cpp_itfs(spec, name)
+            _apply_cpp_itfs(spec, name, namespace)
 
         if namespace:
             spec.md_name = f"{namespace}_{spec.md_name}"
-            spec.flags_extra_cc.append(f"-DQOLA_NAMESPACE={namespace}")
 
         specs.append(spec)
 
@@ -177,13 +178,33 @@ def load_manifest(
         if namespace:
             for spec in mha_specs:
                 spec.md_name = f"{namespace}_{spec.md_name}"
-                spec.flags_extra_cc.append(f"-DQOLA_NAMESPACE={namespace}")
         specs.extend(mha_specs)
 
     return specs
 
 
-def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
+def _write_qola_config(namespace: str) -> None:
+    """Write ``qola_config.h`` into the cpp_itfs directory.
+
+    This injects ``QOLA_NAMESPACE`` via a header that only the wrapper
+    files include (through ``qola_common.h``), avoiding a global ``-D``
+    flag that would invalidate ninja's cache for every CK variant file.
+    """
+    if namespace:
+        content = f"#define QOLA_NAMESPACE {namespace}\n"
+    else:
+        content = "/* No namespace configured. */\n"
+
+    # Only rewrite if the content changed, to avoid needless rebuilds.
+    if os.path.isfile(_QOLA_CONFIG_HEADER):
+        with open(_QOLA_CONFIG_HEADER) as f:
+            if f.read() == content:
+                return
+    with open(_QOLA_CONFIG_HEADER, "w") as f:
+        f.write(content)
+
+
+def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> None:
     """Rewrite *spec* for torch-free cpp_itfs mode.
 
     Drops pybind source files and replaces them with QoLA's cpp_itfs
@@ -194,6 +215,12 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
     real torch so the generated code compiles without libtorch.
     The ``add_includes`` order in the registry matters: stub paths
     must come before AITER include paths.
+
+    The *namespace* is injected via a generated ``qola_config.h`` header
+    placed in the cpp_itfs include directory rather than via a global
+    ``-D`` flag.  This avoids changing compile commands for the thousands
+    of CK variant source files (which never reference the macro), letting
+    ninja skip their recompilation when only the namespace changes.
     """
     src_map = _load_cpp_itfs_src_map()
     mapping = src_map.get(module_name)
@@ -216,6 +243,9 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str) -> None:
         os.path.join(_QOLA_ROOT, inc) for inc in mapping.get("add_includes", [])
     ]
     spec.extra_include = new_includes + spec.extra_include
+
+    # Write namespace config into cpp_itfs/ so only the wrapper files see it.
+    _write_qola_config(namespace)
 
     spec.torch_exclude = True
     spec.is_python_module = False
