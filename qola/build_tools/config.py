@@ -128,14 +128,10 @@ def load_manifest(
 
     specs: List[BuildSpec] = []
     fwd_section = manifest.get("mha_fwd_variants", [])
-    bwd_section = manifest.get("mha_bwd_variants", [])
     module_names = {m["name"] for m in manifest.get("modules", [])}
 
     has_fwd_variants = bool(fwd_section)
-    has_bwd_variants = bool(bwd_section)
-
     has_static_fwd = "libmha_fwd" in module_names
-    has_static_bwd = "libmha_bwd" in module_names
 
     # Keys consumed by load_manifest before passing to _resolve_static_module.
     _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions"}
@@ -260,6 +256,10 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
         spec.extra_ldflags.append(f"-Wl,--version-script,{vs_path}")
 
 
+# Regex to extract the ``-d <direction>`` from a generate.py command.
+_DIR_RE = re.compile(r"-d\s+(\S+)")
+
+
 def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
     """Remove ``blob_gen_cmd`` entries whose ``-d <direction>`` is in *drop_directions*."""
     old_cmds: List[str] = (
@@ -271,62 +271,6 @@ def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
         cmd for cmd in old_cmds
         if not ((m := _DIR_RE.search(cmd)) and m.group(1) in drop_directions)
     ]
-
-
-
-# Directions in blob_gen_cmd that should be filtered per-variant.
-_MHA_FWD_FILTERED_DIRS = {"fwd"}
-_MHA_BWD_FILTERED_DIRS = {"bwd"}
-
-# Regex to extract the ``-d <direction>`` from a generate.py command.
-_DIR_RE = re.compile(r"-d\s+(\S+)")
-
-
-def _apply_mha_variant_filter(
-    spec: BuildSpec,
-    module_name: str,
-    mha_filters: List[Dict[str, Any]],
-) -> None:
-    """Replace unfiltered ``blob_gen_cmd`` with per-variant filtered commands.
-
-    For each CK codegen direction that supports variant filtering (``fwd``
-    for libmha_fwd, ``bwd`` for libmha_bwd), the single unfiltered
-    ``generate.py`` invocation is replaced with N invocations — one per
-    variant — each carrying the variant's ``--filter``.
-
-    .. warning::
-
-       This must NOT be used for static libmha modules (receipt 600).
-       CK's ``generate.py`` regenerates the dispatch API file on every
-       call, so running it N times with different filters overwrites
-       the API dispatch.  Use only for pybind per-variant expansion
-       where each variant is a separate ``.so``.
-    """
-    filtered_dirs = (
-        _MHA_FWD_FILTERED_DIRS
-        if module_name == "libmha_fwd"
-        else _MHA_BWD_FILTERED_DIRS
-    )
-
-    old_cmds: List[str] = (
-        spec.blob_gen_cmd
-        if isinstance(spec.blob_gen_cmd, list)
-        else [spec.blob_gen_cmd] if spec.blob_gen_cmd else []
-    )
-
-    new_cmds: List[str] = []
-    for cmd in old_cmds:
-        m = _DIR_RE.search(cmd)
-        direction = m.group(1) if m else None
-
-        if direction not in filtered_dirs:
-            new_cmds.append(cmd)
-            continue
-
-        for vf in mha_filters:
-            new_cmds.append(f"{cmd} --filter {vf['filter']}")
-
-    spec.blob_gen_cmd = new_cmds
 
 
 def _resolve_static_module(

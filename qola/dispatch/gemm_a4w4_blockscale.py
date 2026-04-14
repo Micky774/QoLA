@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import ctypes
 import functools
-import os
-from pathlib import Path
-from typing import Optional
 
 import torch
+
+from . import find_lib, mangled_sym
 
 # ---- C struct mirroring qola::gemm_a4w4_blockscale_args ----
 
@@ -40,36 +39,14 @@ class _GemmA4W4BlockscaleArgs(ctypes.Structure):
     ]
 
 
-# Itanium ABI mangled name for:
-#   int qola::gemm_a4w4_blockscale(
-#       const qola::gemm_a4w4_blockscale_args&, ihipStream_t*)
-_MANGLED_SYM = (
-    "_ZN4qola20gemm_a4w4_blockscaleERKNS_25gemm_a4w4_blockscale_argsEP12ihipStream_t"
-)
-
-
-def _find_lib(name: str) -> str:
-    """Locate a QoLA-built .so by searching known paths."""
-    candidates = [
-        Path(os.environ.get("QOLA_LIB_DIR", "")) / name,
-        Path(__file__).resolve().parent.parent.parent / "artifacts" / "lib" / name,
-    ]
-    for p in candidates:
-        if p.is_file():
-            return str(p)
-    raise FileNotFoundError(
-        f"Could not find {name}. Set QOLA_LIB_DIR to the directory "
-        f"containing the QoLA-built .so files."
-    )
-
-
 @functools.lru_cache(maxsize=1)
 def _load_lib():
     """Load the cpp_itfs .so and resolve the C++ symbol by mangled name."""
-    so_path = _find_lib("module_gemm_a4w4_blockscale.so")
+    so_path = find_lib("module_gemm_a4w4_blockscale.so")
     lib = ctypes.CDLL(so_path, mode=ctypes.RTLD_GLOBAL)
 
-    fn = getattr(lib, _MANGLED_SYM)
+    sym = mangled_sym("gemm_a4w4_blockscale", "gemm_a4w4_blockscale_args")
+    fn = getattr(lib, sym)
     fn.restype = ctypes.c_int
     fn.argtypes = [ctypes.POINTER(_GemmA4W4BlockscaleArgs), ctypes.c_void_p]
 
