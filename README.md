@@ -163,6 +163,12 @@ The manifest's `[[mha_fwd_variants]]` / `[[mha_bwd_variants]]` sections declare 
 3. Add a `[module_<name>]` entry in [`registry.toml`](qola/cpp_itfs/registry.toml). Drop the pybind source, add your `.cu`, include `torch_stubs/` first.
 4. Verify the module's torch API surface stays within the stubs' support.
 
+## Roadmap
+
+- [ ] CI support for building and publishing pre-built libraries from manifests
+- [ ] Kernel filtering for `libmha` — prune CK codegen instances based on manifest variant declarations in `cpp_itfs` mode (currently pybind-only)
+- [ ] C-level JIT for `libmha` — compile MHA variant `.so` files on first use at the C layer, avoiding ahead-of-time compilation of the full variant matrix
+
 ## License
 
 See the parent repository for license terms.
