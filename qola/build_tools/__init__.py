@@ -171,37 +171,41 @@ def _generate_embedded_hsa(
     archs: List[str],
     specs: List[BuildSpec],
 ) -> None:
-    """Generate an embedded HSA header and inject compile flags into *specs*.
+    """Generate per-module embedded HSA headers and inject compile flags.
 
-    Scans ``{aiter_root}/hsa/{arch}/fmha_v3_fwd`` and
-    ``{arch}/fmha_v3_bwd`` for ``.co`` blobs, generates a C++ header
-    embedding them as byte arrays, and adds the necessary
-    ``-DAITER_EMBEDDED_HSA_HEADER`` flag and include path to every spec.
+    Each module's ``hsa_subdirs`` field (set via the registry or manifest)
+    declares which kernel subdirectories it needs.  A separate header is
+    generated for each module that has matching ``.co`` blobs, so non-MHA
+    modules never carry MHA binary data and vice-versa.  Modules with no
+    ``hsa_subdirs`` are left untouched.
     """
     from .generate_embedded_hsa import generate_embedded_hsa_header
 
     hsa_dir = Path(os.path.join(ns.AITER_META_DIR, "hsa"))
-    header_dir = os.path.join(output_dir, "_embedded_hsa")
-    header_path = os.path.join(header_dir, "aiter_embedded_hsa.h")
 
-    # Determine subdirs from architectures.
-    subdirs: List[str] = []
-    for arch in archs:
-        for kernel_type in ("fmha_v3_fwd", "fmha_v3_bwd"):
-            subdir = f"{arch}/{kernel_type}"
-            if (hsa_dir / subdir).is_dir():
-                subdirs.append(subdir)
-
-    if not subdirs:
-        print("[QoLA] --embed-hsa: no HSA subdirs found, skipping.")
-        return
-
-    count = generate_embedded_hsa_header(hsa_dir, Path(header_path), subdirs)
-    print(f"[QoLA] Embedded {count} HSA .co files into {header_path}")
-
-    # Inject compile flags into every spec.
     for spec in specs:
-        spec.flags_extra_cc.append(f"-DAITER_EMBEDDED_HSA_HEADER='\"aiter_embedded_hsa.h\"'")
+        if not spec.hsa_subdirs:
+            continue
+
+        # Resolve arch × kernel_type subdirs for this module.
+        subdirs: List[str] = []
+        for arch in archs:
+            for kernel_type in spec.hsa_subdirs:
+                subdir = f"{arch}/{kernel_type}"
+                if (hsa_dir / subdir).is_dir():
+                    subdirs.append(subdir)
+
+        if not subdirs:
+            continue
+
+        header_dir = os.path.join(output_dir, "_embedded_hsa", spec.md_name)
+        header_name = f"aiter_embedded_hsa_{spec.md_name}.h"
+        header_path = os.path.join(header_dir, header_name)
+
+        count = generate_embedded_hsa_header(hsa_dir, Path(header_path), subdirs)
+        print(f"[QoLA] Embedded {count} HSA .co files into {header_path}")
+
+        spec.flags_extra_cc.append(f'-DAITER_EMBEDDED_HSA_HEADER=\'"{header_name}"\'')
         spec.extra_include.insert(0, header_dir)
 
 

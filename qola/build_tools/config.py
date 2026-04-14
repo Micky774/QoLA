@@ -35,6 +35,7 @@ class BuildSpec:
     torch_exclude: bool = False
     hipify: bool = False
     hip_clang_path: Optional[str] = None
+    hsa_subdirs: List[str] = field(default_factory=list)
 
 
 # Defaults matching core.py's d_opt_build_args (line 712)
@@ -134,7 +135,7 @@ def load_manifest(
     has_static_fwd = "libmha_fwd" in module_names
 
     # Keys consumed by load_manifest before passing to _resolve_static_module.
-    _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions"}
+    _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions", "hsa_subdirs"}
 
     # --- static modules ---
     # NOTE: Variant filtering is NOT applied to static libmha_fwd /
@@ -157,6 +158,17 @@ def load_manifest(
 
         if mod_mode == "cpp_itfs":
             _apply_cpp_itfs(spec, name, namespace)
+        else:
+            # For pybind mode, hsa_subdirs comes from the manifest entry,
+            # falling back to the registry (which is authoritative for the
+            # module→kernel-type mapping regardless of build mode).
+            manifest_hsa = mod_entry.get("hsa_subdirs")
+            if manifest_hsa is not None:
+                spec.hsa_subdirs = manifest_hsa
+            else:
+                src_map = _load_cpp_itfs_src_map()
+                mapping = src_map.get(name, {})
+                spec.hsa_subdirs = mapping.get("hsa_subdirs", [])
 
         if namespace:
             spec.md_name = f"{namespace}_{spec.md_name}"
@@ -245,6 +257,7 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
 
     spec.torch_exclude = True
     spec.is_python_module = False
+    spec.hsa_subdirs = mapping.get("hsa_subdirs", [])
 
     # Apply default linker flags (e.g. version script to hide aiter:: symbols).
     defaults = src_map.get("defaults", {})

@@ -28,11 +28,13 @@ version_script = "qola/cpp_itfs/qola_exports.lds"
 drop_srcs    = ["pybind/gemm_a4w4_asm_pybind.cu"]
 add_srcs     = ["qola/cpp_itfs/qola_gemm_a4w4_asm.cu"]
 add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
+hsa_subdirs  = ["f4gemm"]
 
 [module_gemm_a4w4_blockscale]
 drop_srcs    = ["pybind/gemm_a4w4_blockscale_pybind.cu"]
 add_srcs     = ["qola/cpp_itfs/qola_gemm_a4w4_blockscale.cu"]
 add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
+# No hsa_subdirs — CK kernels, no .co blobs.
 
 # MHA modules are already torch-free (torch_exclude=true, is_python_module=false
 # in optCompilerConfig).  No pybind sources to drop, no torch_stubs needed.
@@ -42,8 +44,10 @@ add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
 drop_srcs    = []
 add_srcs     = ["qola/cpp_itfs/qola_mha_fwd.cu"]
 add_includes = ["qola/cpp_itfs"]
+hsa_subdirs  = ["fmha_v3_fwd"]
 
 [libmha_bwd]
 drop_srcs    = []
 add_srcs     = ["qola/cpp_itfs/qola_mha_bwd.cu"]
 add_includes = ["qola/cpp_itfs"]
+hsa_subdirs  = ["fmha_v3_bwd"]
