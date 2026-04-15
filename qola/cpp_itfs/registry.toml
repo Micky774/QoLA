@@ -8,6 +8,11 @@
 #                  optCompilerConfig srcs list.
 #   add_srcs     - QoLA cpp_itfs source files to add (relative to QoLA root).
 #   add_includes - extra include directories (relative to QoLA root).
+#                  torch_stubs MUST come first so stub headers shadow real torch.
+#
+# AITER's dispatch .cu files and codegen output are kept in the source list
+# and compiled against QoLA's stub torch headers.  Only the pybind entry
+# points are dropped.
 #
 # All cpp_itfs modules MUST be linked with qola_exports.lds to hide
 # AITER-internal symbols.  Some AITER headers (e.g. mha_fwd.h) declare
@@ -18,6 +23,22 @@
 
 [defaults]
 version_script = "qola/cpp_itfs/qola_exports.lds"
+
+[module_gemm_a4w4_asm]
+drop_srcs    = ["pybind/gemm_a4w4_asm_pybind.cu"]
+add_srcs     = ["qola/cpp_itfs/qola_gemm_a4w4_asm.cu"]
+add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
+hsa_subdirs  = ["f4gemm"]
+
+[module_gemm_a4w4_blockscale]
+drop_srcs    = ["pybind/gemm_a4w4_blockscale_pybind.cu"]
+add_srcs     = ["qola/cpp_itfs/qola_gemm_a4w4_blockscale.cu"]
+add_includes = ["qola/cpp_itfs/torch_stubs", "qola/cpp_itfs"]
+# No hsa_subdirs — CK kernels, no .co blobs.
+
+# MHA modules are already torch-free (torch_exclude=true, is_python_module=false
+# in optCompilerConfig).  No pybind sources to drop, no torch_stubs needed.
+# The wrapper only adds namespace guarding.
 
 [libmha_fwd]
 drop_srcs    = []
