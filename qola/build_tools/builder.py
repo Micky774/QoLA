@@ -57,6 +57,10 @@ def build_kernels(
     output_dir = str(Path(output_dir).resolve())
     manifest_path = str(Path(manifest_path).resolve())
 
+    # Save env vars we'll override so we can restore them on exit.
+    prev_gpu_archs = os.environ.get("GPU_ARCHS")
+    prev_jit_dir = os.environ.get("AITER_JIT_DIR")
+
     # Fall back to manifest's [build] architectures when not specified via CLI.
     if not archs:
         with open(manifest_path, "rb") as f:
@@ -70,6 +74,33 @@ def build_kernels(
     os.environ["AITER_JIT_DIR"] = jit_build_dir
     os.makedirs(jit_build_dir, exist_ok=True)
 
+    try:
+        return _build_kernels_inner(
+            aiter_root, output_dir, manifest_path, archs,
+            jit_build_dir, verbose, build_mode,
+        )
+    finally:
+        _restore_env("GPU_ARCHS", prev_gpu_archs)
+        _restore_env("AITER_JIT_DIR", prev_jit_dir)
+
+
+def _restore_env(key: str, prev: Optional[str]) -> None:
+    """Restore an environment variable to its previous value, or remove it."""
+    if prev is not None:
+        os.environ[key] = prev
+    else:
+        os.environ.pop(key, None)
+
+
+def _build_kernels_inner(
+    aiter_root: str,
+    output_dir: str,
+    manifest_path: str,
+    archs: Optional[List[str]],
+    jit_build_dir: str,
+    verbose: bool,
+    build_mode: str,
+) -> dict[str, Any]:
     # 1. Resolve namespace
     ns = build_namespace(aiter_root)
 

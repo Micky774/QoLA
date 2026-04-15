@@ -38,7 +38,7 @@ class BuildSpec:
     hsa_subdirs: List[str] = field(default_factory=list)
 
 
-# Defaults matching core.py's d_opt_build_args (line 712)
+# Defaults matching core.py's d_opt_build_args (line 712, commit 33f2e6af)
 _DEFAULTS: dict[str, Any] = {
     "srcs": [],
     "flags_extra_cc": [],
@@ -191,7 +191,7 @@ def load_manifest(
     return specs
 
 
-def _write_qola_config(namespace: str) -> None:
+def _write_qola_config_header(namespace: str) -> None:
     """Write ``qola_config.h`` into the cpp_itfs directory.
 
     This injects ``QOLA_NAMESPACE`` via a header that only the wrapper
@@ -247,7 +247,7 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
     spec.extra_include = new_includes + spec.extra_include
 
     # Write namespace config into cpp_itfs/ so only the wrapper files see it.
-    _write_qola_config(namespace)
+    _write_qola_config_header(namespace)
 
     spec.torch_exclude = True
     spec.is_python_module = False
