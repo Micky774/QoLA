@@ -101,8 +101,8 @@ def load_manifest(
         mode = "cpp_itfs"                 # optional global default
 
         [[modules]]
-        name = "module_gemm_a4w4_asm"
-        mode = "pybind"                   # optional per-module override
+        name = "libmha_fwd"
+        mode = "cpp_itfs"                 # optional per-module override
 
         # Separate fwd/bwd variant sections (different option spaces):
         [[mha_fwd_variants]]
@@ -217,12 +217,6 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
 
     Drops pybind source files and replaces them with QoLA's cpp_itfs
     wrappers.  Forces ``torch_exclude=True`` and ``is_python_module=False``.
-
-    For CK modules, AITER's codegen and common headers are used
-    unmodified — QoLA's stub torch headers (``torch_stubs/``) shadow
-    real torch so the generated code compiles without libtorch.
-    The ``add_includes`` order in the registry matters: stub paths
-    must come before AITER include paths.
 
     The *namespace* is injected via a generated ``qola_config.h`` header
     placed in the cpp_itfs include directory rather than via a global
