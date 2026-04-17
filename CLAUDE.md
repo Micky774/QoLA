@@ -27,7 +27,16 @@ qola/
 - **`pybind`** (default): `is_python_module=True, torch_exclude=False`. Produces standard pybind11 `.so` importable from Python. Requires torch at build and runtime.
 - **`cpp_itfs`**: `is_python_module=False, torch_exclude=True`. Produces a plain C-linkable `.so` with no torch dependency. Requires only HIP/ROCm. Source replacement is driven by `cpp_itfs/registry.toml`.
 
-Mode precedence: CLI `--mode` < manifest `[build] mode` < per-module `mode`.
+## Configuration precedence (CLI vs manifest)
+
+CLI flags win over manifest globals; per-module entries (most specific scope) still win over the CLI.
+
+| Setting          | Highest → lowest precedence                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Build mode       | `[[modules]].mode` → CLI `--mode` → `[build].mode` → `"pybind"` default                  |
+| GPU architectures| CLI `--arch` (repeatable) → `[build].architectures` → `$GPU_ARCHS` → `"native"`          |
+
+A flag is "set" only when explicitly passed; argparse defaults to `None` for `--mode` so it cannot accidentally override a manifest value. Per-module overrides are an opt-out from a CLI-wide blanket: `qola build --mode cpp_itfs` builds everything in `cpp_itfs` *except* modules that pin `mode = "pybind"` in `[[modules]]`.
 
 ## Key concepts
 

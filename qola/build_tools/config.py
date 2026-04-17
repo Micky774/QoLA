@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """TOML manifest parsing and optCompilerConfig.json eval."""
 
 from __future__ import annotations
@@ -73,7 +74,7 @@ def _load_cpp_itfs_src_map() -> Dict[str, Dict[str, List[str]]]:
 def load_manifest(
     manifest_path: str,
     ns: AiterNamespace,
-    build_mode: str = "pybind",
+    build_mode: Optional[str] = None,
 ) -> List[BuildSpec]:
     """Parse a TOML manifest and return resolved :class:`BuildSpec` instances.
 
@@ -84,11 +85,12 @@ def load_manifest(
     ns
         Resolved AITER namespace.
     build_mode
-        ``"pybind"`` (default) for torch-enabled Python modules, or
-        ``"cpp_itfs"`` for torch-free C-linkable shared libraries.
-        Can be overridden per-module via the ``mode`` key in the manifest.
-        The CLI ``--mode`` flag sets this, but the manifest's ``[build] mode``
-        takes precedence, and per-module ``mode`` takes highest precedence.
+        ``"pybind"`` for torch-enabled Python modules, or ``"cpp_itfs"`` for
+        torch-free C-linkable shared libraries.  When provided (typically by
+        the CLI ``--mode`` flag), wins over the manifest's ``[build].mode``.
+        Per-module ``mode`` entries in ``[[modules]]`` still take final
+        precedence (most specific scope).  When ``None`` and unset in the
+        manifest, defaults to ``"pybind"``.
 
     Manifest schema::
 
@@ -123,8 +125,9 @@ def load_manifest(
     )
     eval_globals = make_eval_globals(ns)
 
-    # Resolve effective build mode: CLI < [build].mode < per-module mode.
-    global_mode = manifest.get("build", {}).get("mode", build_mode)
+    # Resolve effective build mode by scope (most specific wins):
+    #   per-module `mode` > CLI --mode (build_mode) > [build].mode > "pybind".
+    global_mode = build_mode or manifest.get("build", {}).get("mode") or "pybind"
     namespace = manifest.get("qola", {}).get("namespace", "")
 
     specs: List[BuildSpec] = []

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """QoLA command-line interface."""
 
 from __future__ import annotations
@@ -42,9 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     build_p.add_argument(
         "--mode",
         choices=["pybind", "cpp_itfs"],
-        default="pybind",
-        help="Build mode: 'pybind' (torch-enabled Python modules, default) "
-        "or 'cpp_itfs' (torch-free C-linkable shared libraries).",
+        default=None,
+        help="Build mode: 'pybind' (torch-enabled Python modules) or "
+        "'cpp_itfs' (torch-free C-linkable shared libraries). When set, "
+        "overrides the manifest's [build].mode but per-module 'mode' entries "
+        "in [[modules]] still win. Defaults to 'pybind' if unset everywhere.",
     )
     build_p.add_argument(
         "--verbose",

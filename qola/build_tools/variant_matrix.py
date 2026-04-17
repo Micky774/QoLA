@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """Expand MHA fwd variant manifest declarations into BuildSpec instances.
 
 Each entry supports cartesian-product expansion: options may be scalars,

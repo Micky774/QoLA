@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """Resolve AITER source tree paths and reconstruct the eval() namespace
 that optCompilerConfig.json string fields expect."""
 

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 """AOTA build layer — manifest-driven ahead-of-time AITER kernel compilation."""
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ def build_kernels(
     output_dir: str,
     archs: Optional[List[str]] = None,
     verbose: bool = False,
-    build_mode: str = "pybind",
+    build_mode: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build AITER kernel modules from a consumer manifest.
 
@@ -40,13 +41,17 @@ def build_kernels(
     output_dir
         Root of the structured output directory.
     archs
-        GPU arch targets (e.g. ``["gfx942"]``).  Falls back to
-        ``$GPU_ARCHS`` or ``"native"``.
+        GPU arch targets (e.g. ``["gfx942"]``).  When provided, wins over
+        the manifest's ``[build].architectures``.  When ``None``, falls back
+        to manifest, then ``$GPU_ARCHS``, then ``"native"``.
     verbose
         Forward verbose flag to ``build_module()`` calls.
     build_mode
-        ``"pybind"`` (default) for torch-enabled Python modules, or
-        ``"cpp_itfs"`` for torch-free C-linkable shared libraries.
+        ``"pybind"`` for torch-enabled Python modules, or ``"cpp_itfs"`` for
+        torch-free C-linkable shared libraries.  When provided, wins over
+        the manifest's ``[build].mode``.  Per-module ``mode`` entries in
+        ``[[modules]]`` still take final precedence (most specific scope).
+        When ``None`` everywhere, defaults to ``"pybind"``.
 
     Returns
     -------

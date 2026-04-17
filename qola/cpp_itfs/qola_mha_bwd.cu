@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2025, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Thin cpp_itfs entry point for AITER's mha_bwd.
 

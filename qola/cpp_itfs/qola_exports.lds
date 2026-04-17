@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved. */
+
 /* Linker version script for QoLA cpp_itfs shared libraries.
  *
  * Only symbols in the qola:: namespace are exported.  Everything else —

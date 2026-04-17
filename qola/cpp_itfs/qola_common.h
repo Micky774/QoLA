@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
 #include <hip/hip_runtime.h>
 #include "qola_config.h"
 
