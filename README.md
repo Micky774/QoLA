@@ -116,7 +116,6 @@ output-dir/
     te_libmha_fwd.so
     te_libmha_bwd.so
   configs/                # AITER tuning CSVs
-  asm/                    # ASM .co blobs (by arch)
   manifest.json           # Build metadata and per-module results
 ```
 

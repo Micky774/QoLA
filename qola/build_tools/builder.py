@@ -118,12 +118,10 @@ def _build_kernels_inner(
     # 4. Prepare output directories
     lib_dir = os.path.join(output_dir, "lib")
     configs_dir = os.path.join(output_dir, "configs")
-    asm_dir = os.path.join(output_dir, "asm")
-    for d in (lib_dir, configs_dir, asm_dir):
+    for d in (lib_dir, configs_dir):
         os.makedirs(d, exist_ok=True)
 
     _copy_tuning_csvs(ns, configs_dir)
-    _copy_asm_blobs(ns, asm_dir)
 
     # 4b. Generate embedded HSA header.
     _generate_embedded_hsa(ns, output_dir, archs or [], specs)
@@ -257,18 +255,6 @@ def _copy_tuning_csvs(ns: AiterNamespace, dst: str) -> None:
         if os.path.exists(model_dst):
             shutil.rmtree(model_dst)
         shutil.copytree(model_src, model_dst)
-
-
-def _copy_asm_blobs(ns: AiterNamespace, dst: str) -> None:
-    hsa_root = os.path.join(ns.AITER_META_DIR, "hsa")
-    if not os.path.isdir(hsa_root):
-        return
-    for child in Path(hsa_root).iterdir():
-        if child.is_dir() and child.name.startswith("gfx"):
-            arch_dst = os.path.join(dst, child.name)
-            if os.path.exists(arch_dst):
-                shutil.rmtree(arch_dst)
-            shutil.copytree(str(child), arch_dst)
 
 
 def _write_manifest(

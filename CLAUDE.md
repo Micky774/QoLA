@@ -85,7 +85,7 @@ docker exec <container> python -m qola.cli build \
 
 - Build time: AITER source tree, ROCm/HIP, hipcc. Torch required for pybind mode only.
 - Runtime (pybind): torch, ROCm
-- Runtime (cpp_itfs): ROCm only. `.co` ASM blobs must be available via `AITER_ASM_DIR`.
+- Runtime (cpp_itfs): ROCm only. ASM blobs are baked into each `.so` at build time via `_generate_embedded_hsa`; there is no `AITER_ASM_DIR` filesystem fallback.
 
 ## Submodule
 
