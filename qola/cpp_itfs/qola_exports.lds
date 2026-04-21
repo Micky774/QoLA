@@ -12,9 +12,11 @@
  */
 {
   global:
-    _ZN4qola*;          /* qola::*                                    */
-    _ZTIN4qola*;        /* qola:: typeinfo names  (for exceptions)    */
-    _ZTSN4qola*;        /* qola:: typeinfo strings                    */
+    extern "C++" {
+      "qola::*";
+      "typeinfo for qola::*";
+      "typeinfo name for qola::*";
+    };
   local:
     *;
 };
