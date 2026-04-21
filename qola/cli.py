@@ -60,11 +60,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         from .build_tools import build_kernels
 
+        archs: list[str] | None = None
+        if args.archs:
+            archs = [a for entry in args.archs for a in entry.split(";") if a]
+
         result = build_kernels(
             manifest_path=args.manifest,
             aiter_root=args.aiter_root,
             output_dir=args.output_dir,
-            archs=args.archs,
+            archs=archs,
             verbose=args.verbose,
             build_mode=args.mode,
         )
