@@ -105,6 +105,8 @@ def load_manifest(
         [[modules]]
         name = "libmha_fwd"
         mode = "cpp_itfs"                 # optional per-module override
+        receipt = 700                     # optional CK codegen filter (default: whatever
+                                          # optCompilerConfig.json specifies, typically 600)
 
         # Separate fwd/bwd variant sections (different option spaces):
         [[mha_fwd_variants]]
@@ -138,7 +140,7 @@ def load_manifest(
     has_static_fwd = "libmha_fwd" in module_names
 
     # Keys consumed by load_manifest before passing to _resolve_static_module.
-    _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions", "hsa_subdirs"}
+    _MANIFEST_KEYS = {"name", "mode", "drop_srcs", "drop_directions", "hsa_subdirs", "receipt"}
 
     # --- static modules ---
     # NOTE: Variant filtering is NOT applied to static libmha_fwd /
@@ -158,6 +160,9 @@ def load_manifest(
             spec.srcs = [s for s in spec.srcs if os.path.basename(s) not in drop_srcs]
         if drop_directions:
             _drop_blob_directions(spec, drop_directions)
+        receipt = mod_entry.get("receipt")
+        if receipt is not None:
+            _rewrite_receipt(spec, receipt)
 
         if mod_mode == "cpp_itfs":
             _apply_cpp_itfs(spec, name, namespace)
@@ -268,6 +273,8 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
 
 # Regex to extract the ``-d <direction>`` from a generate.py command.
 _DIR_RE = re.compile(r"-d\s+(\S+)")
+# Regex to match the ``--receipt N`` argument in a generate.py command.
+_RECEIPT_RE = re.compile(r"--receipt\s+\d+")
 
 
 def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
@@ -280,6 +287,18 @@ def _drop_blob_directions(spec: BuildSpec, drop_directions: set) -> None:
     spec.blob_gen_cmd = [
         cmd for cmd in old_cmds
         if not ((m := _DIR_RE.search(cmd)) and m.group(1) in drop_directions)
+    ]
+
+
+def _rewrite_receipt(spec: BuildSpec, receipt: int) -> None:
+    """Replace ``--receipt N`` with ``--receipt {receipt}`` in every blob_gen_cmd entry."""
+    old_cmds: List[str] = (
+        spec.blob_gen_cmd
+        if isinstance(spec.blob_gen_cmd, list)
+        else [spec.blob_gen_cmd] if spec.blob_gen_cmd else []
+    )
+    spec.blob_gen_cmd = [
+        _RECEIPT_RE.sub(f"--receipt {int(receipt)}", cmd) for cmd in old_cmds
     ]
 
 
