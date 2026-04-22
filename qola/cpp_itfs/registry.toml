@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
+#
+# QoLA cpp_itfs source registry.
+#
+# Maps optCompilerConfig module names to the source replacements needed
+# when building in cpp_itfs (torch-free) mode.
+#
+# For each module:
+#   drop_srcs    - basenames of pybind sources to remove from the
+#                  optCompilerConfig srcs list.
+#   add_srcs     - QoLA cpp_itfs source files to add (relative to QoLA root).
+#   add_includes - extra include directories (relative to QoLA root).
+#
+# All cpp_itfs modules MUST be linked with qola_exports.lds to hide
+# AITER-internal symbols.  Some AITER headers (e.g. mha_fwd.h) declare
+# functions with explicit visibility("default"), which would otherwise
+# leak into the final .so and collide if multiple AITER-backed libraries
+# coexist in one process.  The version script ensures only qola::*
+# symbols are exported.
+
+[defaults]
+version_script = "qola/cpp_itfs/qola_exports.lds"
+
+[libmha_fwd]
+drop_srcs    = []
+add_srcs     = ["qola/cpp_itfs/qola_mha_fwd.cu"]
+add_includes = ["qola/cpp_itfs"]
+hsa_subdirs  = ["fmha_v3_fwd"]
+
+[libmha_bwd]
+drop_srcs    = []
+add_srcs     = ["qola/cpp_itfs/qola_mha_bwd.cu"]
+add_includes = ["qola/cpp_itfs"]
+hsa_subdirs  = ["fmha_v3_bwd"]
