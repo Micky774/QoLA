@@ -113,8 +113,8 @@ Source replacement is driven by [`cpp_itfs/registry.toml`](qola/cpp_itfs/registr
 ```
 output-dir/
   lib/                    # Compiled .so files
-    te_libmha_fwd.so
-    te_libmha_bwd.so
+    libmha_fwd_te.so
+    libmha_bwd_te.so
   configs/                # AITER tuning CSVs
   manifest.json           # Build metadata and per-module results
 ```
