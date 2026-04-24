@@ -64,7 +64,7 @@ Namespace wrappers alone are not sufficient — AITER headers like `mha_fwd.h` d
 
 ### CK codegen receipt (`receipt`)
 
-Per-module manifest field that overrides the `--receipt N` argument in every `blob_gen_cmd` entry from `optCompilerConfig.json` (which defaults to 600 — the generic `aiter::mha_*` C++ API filter). Receipt 700 is a TransformerEngine-specific filter that drops fp8, qscale, logits, skip/sink, and non-row vlayout instances; this shrinks fwd codegen ~48× vs 600. Set in the manifest as `receipt = 700` under `[[modules]]`. Implemented as a post-eval regex rewrite of `spec.blob_gen_cmd` in `_rewrite_receipt` (config.py).
+Per-module manifest field that overrides the `--receipt N` argument in every `blob_gen_cmd` entry from `optCompilerConfig.json` (which defaults to 600 — the generic `aiter::mha_*` C++ API filter). Receipt 700 is a TransformerEngine-specific filter that drops fp8, qscale, logits, skip/sink, and non-row vlayout instances; this shrinks fwd codegen ~10x vs 600. Set in the manifest as `receipt = 700` under `[[modules]]`. Implemented as a post-eval regex rewrite of `spec.blob_gen_cmd` in `_rewrite_receipt` (config.py).
 
 ## Running builds
 
