@@ -25,8 +25,17 @@ def main(argv: list[str] | None = None) -> int:
     build_p.add_argument(
         "--aiter-root",
         "-a",
-        required=True,
-        help="Path to the AITER source tree root",
+        default=None,
+        help="Path to the AITER source tree root. Defaults to the bundled "
+        "submodule at <QoLA repo>/3rdparty/aiter.",
+    )
+    build_p.add_argument(
+        "--aiter-commit",
+        default=None,
+        help="AITER git commit (full SHA, short SHA, tag, or branch) to "
+        "fetch and checkout in --aiter-root before building. Overrides the "
+        "manifest's [qola] aiter_commit. When unset everywhere, builds "
+        "against whatever is currently checked out.",
     )
     build_p.add_argument(
         "--output-dir",
@@ -71,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
             archs=archs,
             verbose=args.verbose,
             build_mode=args.mode,
+            aiter_commit=args.aiter_commit,
         )
         s = result["summary"]
         print(
