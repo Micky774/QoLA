@@ -155,4 +155,4 @@ The manifest's `[[mha_fwd_variants]]` / `[[mha_bwd_variants]]` sections declare 
 
 ## License
 
-See the parent repository for license terms.
+MIT License. See `LICENSE` for more details.
