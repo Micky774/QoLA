@@ -20,15 +20,18 @@ except ModuleNotFoundError:
 
 from .config import BuildSpec, load_manifest
 from .resolver import AiterNamespace, build_namespace, load_build_module_fn
+from .submodule import default_aiter_root, ensure_aiter_commit
 
 
 def build_kernels(
     manifest_path: str,
-    aiter_root: str,
+    *,
     output_dir: str,
+    aiter_root: Optional[str] = None,
     archs: Optional[List[str]] = None,
     verbose: bool = False,
     build_mode: Optional[str] = None,
+    aiter_commit: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build AITER kernel modules from a consumer manifest.
 
@@ -37,7 +40,8 @@ def build_kernels(
     manifest_path
         Path to the TOML consumer manifest.
     aiter_root
-        Path to the AITER source tree root (``3rdparty/aiter/``).
+        Path to the AITER source tree root.  When ``None``, defaults to the
+        bundled submodule at ``<QoLA repo>/3rdparty/aiter``.
     output_dir
         Root of the structured output directory.
     archs
@@ -52,12 +56,18 @@ def build_kernels(
         the manifest's ``[build].mode``.  Per-module ``mode`` entries in
         ``[[modules]]`` still take final precedence (most specific scope).
         When ``None`` everywhere, defaults to ``"pybind"``.
+    aiter_commit
+        AITER commit to checkout in *aiter_root* before building.  When
+        provided, overrides the manifest's ``[qola] aiter_commit``.  When
+        unset everywhere, builds against whatever is currently checked out.
 
     Returns
     -------
     dict
         Contents of the written ``manifest.json``.
     """
+    if aiter_root is None:
+        aiter_root = default_aiter_root()
     aiter_root = str(Path(aiter_root).resolve())
     output_dir = str(Path(output_dir).resolve())
     manifest_path = str(Path(manifest_path).resolve())
@@ -66,10 +76,19 @@ def build_kernels(
     prev_gpu_archs = os.environ.get("GPU_ARCHS")
     prev_jit_dir = os.environ.get("AITER_JIT_DIR")
 
+    # Read manifest once for archs and aiter_commit fallbacks (load_manifest
+    # re-parses it later for the full module schema).
+    with open(manifest_path, "rb") as f:
+        manifest = tomllib.load(f)
+
+    # Resolve and apply AITER commit before any path resolution that depends
+    # on the AITER tree contents.
+    effective_commit = aiter_commit or manifest.get("qola", {}).get("aiter_commit")
+    ensure_aiter_commit(aiter_root, effective_commit)
+
     # Fall back to manifest's [build] architectures when not specified via CLI.
     if not archs:
-        with open(manifest_path, "rb") as f:
-            archs = tomllib.load(f).get("build", {}).get("architectures")
+        archs = manifest.get("build", {}).get("architectures")
 
     if archs:
         os.environ["GPU_ARCHS"] = ";".join(archs)
