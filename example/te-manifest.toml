@@ -11,12 +11,14 @@ architectures = ["gfx950"]
 [[modules]]
 name = "libmha_fwd"
 mode = "cpp_itfs"
+receipt = 700
 drop_srcs = ["mha_fwd_split.cu", "mha_fwd_batch_prefill.cu"]
 drop_directions = ["fwd_splitkv", "batch_prefill"]
 
 [[modules]]
 name = "libmha_bwd"
 mode = "cpp_itfs"
+receipt = 700
 
 # MHA variant declarations.  Fwd and bwd have separate sections because
 # CK codegen uses different instance naming schemes per direction.
