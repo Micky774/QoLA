@@ -228,6 +228,7 @@ def _invoke_build(build_module_fn, spec: BuildSpec, verbose: bool) -> None:
             is_python_module=spec.is_python_module,
             is_standalone=spec.is_standalone,
             torch_exclude=spec.torch_exclude,
+            third_party=spec.third_party,
             hipify=spec.hipify,
         )
     finally:
