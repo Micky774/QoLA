@@ -34,6 +34,7 @@ class BuildSpec:
     is_python_module: bool = True
     is_standalone: bool = False
     torch_exclude: bool = False
+    third_party: List[str] = field(default_factory=list)
     hipify: bool = False
     hip_clang_path: Optional[str] = None
     hsa_subdirs: List[str] = field(default_factory=list)
@@ -50,6 +51,7 @@ _DEFAULTS: dict[str, Any] = {
     "is_python_module": True,
     "is_standalone": False,
     "torch_exclude": False,
+    "third_party": [],
     "blob_gen_cmd": "",
     "hipify": False,
     "hip_clang_path": None,
@@ -356,6 +358,7 @@ def _eval_entry(
         is_python_module=bool(resolved.get("is_python_module", True)),
         is_standalone=bool(resolved.get("is_standalone", False)),
         torch_exclude=bool(resolved.get("torch_exclude", False)),
+        third_party=list(resolved.get("third_party", [])),
         hipify=bool(resolved.get("hipify", False)),
         hip_clang_path=resolved.get("hip_clang_path"),
     )
