@@ -18,7 +18,7 @@ QoLA is designed for [Transformer Engine](https://github.com/NVIDIA/TransformerE
 
 - Python >= 3.10
 - ROCm / HIP toolchain (hipcc)
-- AITER source tree (included as a git submodule at `3rdparty/aiter/`)
+- AITER source tree (cloned on demand into `3rdparty/aiter/` — git-ignored, not a submodule; the manifest's `[qola] aiter_commit` pins the SHA)
 - PyTorch (pybind mode only)
 
 ## Installation
@@ -30,16 +30,16 @@ pip install -e .
 ## Quick Start
 
 ```bash
-# Build all modules declared in a manifest (pybind mode)
+# Build all modules declared in a manifest (pybind mode).
+# AITER is cloned into 3rdparty/aiter/ on first use and checked out to the
+# manifest's [qola] aiter_commit; --aiter-root is optional.
 qola build \
   --manifest example/te-manifest.toml \
-  --aiter-root 3rdparty/aiter \
   --output-dir /tmp/qola-out
 
 # Build in cpp_itfs mode (no PyTorch dependency)
 qola build \
   --manifest example/te-manifest.toml \
-  --aiter-root 3rdparty/aiter \
   --output-dir /tmp/qola-out \
   --mode cpp_itfs
 ```
@@ -49,7 +49,8 @@ qola build \
 | Option | Description |
 |---|---|
 | `--manifest` | Path to the TOML manifest file |
-| `--aiter-root` | Path to the AITER source tree |
+| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/3rdparty/aiter`, cloned on demand) |
+| `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest's `[qola] aiter_commit`) |
 | `--output-dir` | Directory for build artifacts |
 | `--arch` | Target GPU architecture (repeatable, e.g. `--arch gfx950`) |
 | `--mode` | Build mode: `pybind` (default) or `cpp_itfs` |

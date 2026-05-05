@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2026, Advanced Micro Devices, Inc. All rights reserved.
-"""AITER submodule checkout management."""
+"""On-the-fly AITER checkout management.
+
+AITER is *not* a submodule of QoLA — it is cloned on demand into a
+git-ignored directory (``<QoLA repo>/3rdparty/aiter`` by default).  The
+manifest's ``[qola] aiter_commit`` (or ``--aiter-commit``) pins which
+commit the build runs against.
+"""
 
 from __future__ import annotations
 
@@ -11,36 +17,47 @@ from typing import Optional
 # QoLA repo root: <repo>/qola/build_tools/submodule.py -> <repo>
 _QOLA_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_AITER_ROOT = _QOLA_ROOT / "3rdparty" / "aiter"
+_AITER_REPO_URL = "https://github.com/ROCm/aiter.git"
 
 
 def default_aiter_root() -> str:
-    """Path to the bundled AITER submodule (``<QoLA repo>/3rdparty/aiter``)."""
+    """Default path for the AITER checkout (``<QoLA repo>/3rdparty/aiter``).
+
+    Git-ignored at the QoLA level. The build system clones into it on first
+    use; subsequent builds fetch and check out the requested commit.
+    """
     return str(_DEFAULT_AITER_ROOT)
 
 
 def ensure_aiter_commit(aiter_root: str, commit: Optional[str]) -> None:
-    """Fetch and checkout *commit* in the AITER tree at *aiter_root*.
+    """Ensure *aiter_root* is a git checkout at *commit*.
 
-    No-op when *commit* is ``None`` — preserves the legacy behavior of
-    building against whatever the caller has already checked out.
+    Clones ``ROCm/aiter`` into *aiter_root* if no git tree exists there.
+    Once a checkout is present, fetches and checks out *commit* using the
+    same dirty-tree policy as before: if the tree's HEAD already matches
+    *commit*, the working copy is left alone (a dirty tree is permitted in
+    that case); a dirty tree combined with a different requested commit is
+    an error.
 
-    When *commit* is given, the tree's HEAD is forced to that SHA.  If the
-    tree's HEAD already matches, the working copy is left alone (a dirty
-    tree is permitted in that case).  A dirty tree combined with a
-    different requested commit is an error — we won't silently discard
-    work.
+    No-op when *commit* is ``None`` and the checkout already exists —
+    builds against whatever is currently checked out.  When *commit* is
+    ``None`` and the checkout is missing, raises (we don't know what to
+    clone to).
     """
+    root = Path(aiter_root)
+    is_checkout = (root / ".git").exists()
+
+    if not is_checkout:
+        if commit is None:
+            raise RuntimeError(
+                f"AITER checkout at {aiter_root!r} does not exist and no "
+                f"commit was specified. Set [qola] aiter_commit in the "
+                f"manifest or pass --aiter-commit so QoLA can clone."
+            )
+        _clone(aiter_root)
+
     if commit is None:
         return
-
-    root = Path(aiter_root)
-    if not (root / ".git").exists():
-        raise RuntimeError(
-            f"--aiter-root {aiter_root!r} is not a git checkout. "
-            f"Run `git submodule update --init 3rdparty/aiter` from the "
-            f"QoLA repo root, or pass --aiter-root pointing at a real "
-            f"AITER git tree."
-        )
 
     target = _resolve_commit(aiter_root, commit)
     head = _git(aiter_root, "rev-parse", "HEAD").strip()
@@ -60,6 +77,17 @@ def ensure_aiter_commit(aiter_root: str, commit: Optional[str]) -> None:
     print(f"[QoLA] Checking out AITER {target} (was {head})")
     _git(aiter_root, "checkout", "--detach", target)
     _git(aiter_root, "submodule", "update", "--init", "--recursive")
+
+
+def _clone(aiter_root: str) -> None:
+    """Partial-clone ``ROCm/aiter`` into *aiter_root*."""
+    root = Path(aiter_root)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[QoLA] Cloning {_AITER_REPO_URL} -> {aiter_root}")
+    subprocess.run(
+        ["git", "clone", "--filter=blob:none", _AITER_REPO_URL, str(root)],
+        check=True,
+    )
 
 
 def _resolve_commit(aiter_root: str, commit: str) -> str:

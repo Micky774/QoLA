@@ -26,8 +26,9 @@ def main(argv: list[str] | None = None) -> int:
         "--aiter-root",
         "-a",
         default=None,
-        help="Path to the AITER source tree root. Defaults to the bundled "
-        "submodule at <QoLA repo>/3rdparty/aiter.",
+        help="Path to the AITER source tree root. Defaults to "
+        "<QoLA repo>/3rdparty/aiter, a git-ignored directory that QoLA "
+        "clones into on first use.",
     )
     build_p.add_argument(
         "--aiter-commit",

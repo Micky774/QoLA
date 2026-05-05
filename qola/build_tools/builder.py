@@ -40,8 +40,9 @@ def build_kernels(
     manifest_path
         Path to the TOML consumer manifest.
     aiter_root
-        Path to the AITER source tree root.  When ``None``, defaults to the
-        bundled submodule at ``<QoLA repo>/3rdparty/aiter``.
+        Path to the AITER source tree root.  When ``None``, defaults to
+        ``<QoLA repo>/3rdparty/aiter`` — a git-ignored directory that QoLA
+        clones into on first use.
     output_dir
         Root of the structured output directory.
     archs

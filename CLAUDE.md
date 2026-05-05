@@ -35,7 +35,7 @@ CLI flags win over manifest globals; per-module entries (most specific scope) st
 | ---------------- | ---------------------------------------------------------------------------------------- |
 | Build mode       | `[[modules]].mode` → CLI `--mode` → `[build].mode` → `"pybind"` default                  |
 | GPU architectures| CLI `--arch` (repeatable) → `[build].architectures` → `$GPU_ARCHS` → `"native"`          |
-| AITER commit     | CLI `--aiter-commit` → `[qola].aiter_commit` → currently checked-out submodule HEAD      |
+| AITER commit     | CLI `--aiter-commit` → `[qola].aiter_commit` → currently checked-out HEAD                |
 
 A flag is "set" only when explicitly passed; argparse defaults to `None` for `--mode` so it cannot accidentally override a manifest value. Per-module overrides are an opt-out from a CLI-wide blanket: `qola build --mode cpp_itfs` builds everything in `cpp_itfs` *except* modules that pin `mode = "pybind"` in `[[modules]]`.
 
@@ -67,10 +67,10 @@ Namespace wrappers alone are not sufficient — AITER headers like `mha_fwd.h` d
 
 All builds and Python execution must happen inside the docker container (see parent repo CLAUDE.md). The host is for file reads, searches, and git only.
 
-`--aiter-root` is optional and defaults to `<QoLA repo>/3rdparty/aiter` (the bundled submodule). Before compilation, the build system fetches and checks out the AITER commit resolved per the precedence table above; pass `--aiter-commit <sha>` to override the manifest's `[qola] aiter_commit`.
+`--aiter-root` is optional and defaults to `<QoLA repo>/3rdparty/aiter` — a git-ignored directory that QoLA clones `https://github.com/ROCm/aiter.git` into on first use. On every build the system fetches and checks out the AITER commit resolved per the precedence table above; pass `--aiter-commit <sha>` to override the manifest's `[qola] aiter_commit`.
 
 ```bash
-# pybind mode (default), uses bundled AITER submodule + manifest commit
+# pybind mode (default), clones/updates AITER per the manifest commit
 docker exec <container> python -m qola.cli build \
   --manifest example/manifest.toml \
   --output-dir /tmp/qola-out
@@ -89,8 +89,10 @@ docker exec <container> python -m qola.cli build \
 - Runtime (pybind): torch, ROCm
 - Runtime (cpp_itfs): ROCm only. ASM blobs are baked into each `.so` at build time via `_generate_embedded_hsa`; there is no `AITER_ASM_DIR` filesystem fallback.
 
-## Submodule
+## AITER checkout
 
-`3rdparty/aiter/` is the bundled AITER checkout. The submodule pin in `.gitmodules` is a *fallback default* only — it controls the AITER commit you get on a fresh `git submodule update --init`, but the build system overrides it on every build by fetching and checking out the manifest's `[qola] aiter_commit` (or `--aiter-commit`). Any QoLA commit can target any AITER commit by editing the manifest; no submodule bump required.
+AITER is **not** a submodule of this repo — it is cloned on demand into `3rdparty/aiter/` (git-ignored) by `qola.build_tools.submodule.ensure_aiter_commit`. Consumer manifests (`[qola] aiter_commit`, or `--aiter-commit`) pin the SHA on every build. Any QoLA commit can target any AITER commit by editing the manifest; nothing in this repo references a fixed AITER SHA.
+
+If `3rdparty/aiter/` does not yet exist, the first build clones `https://github.com/ROCm/aiter.git` into it (partial clone, `--filter=blob:none`) and checks out the manifest's commit. Subsequent builds reuse the same checkout, fetching new commits as needed. Delete the directory to force a fresh clone.
 
 Dirty-tree policy: when the requested commit equals the current HEAD, the working copy is left alone (local hacks survive). When a *different* commit is requested and the tree is dirty, the build aborts rather than discarding work — commit, stash, or pin the manifest to the current HEAD to proceed. Do not modify AITER source here for permanent changes; maintain patches in a QoLA-specific AITER feature branch.
