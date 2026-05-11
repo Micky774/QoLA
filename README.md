@@ -19,7 +19,7 @@ QoLA is designed for [Transformer Engine](https://github.com/NVIDIA/TransformerE
 
 - Python >= 3.10
 - ROCm / HIP toolchain (hipcc)
-- AITER source tree (cloned on demand into `3rdparty/aiter/` — git-ignored, not a submodule; the manifest's `[qola] aiter_commit` pins the SHA)
+- AITER source tree (cloned on demand into `build/third_party/aiter/` — git-ignored, not a submodule; the manifest's `[qola] aiter_commit` pins the SHA)
 - PyTorch (pybind mode only)
 
 ## Installation
@@ -32,7 +32,7 @@ pip install -e .
 
 ```bash
 # Build all modules declared in a manifest (pybind mode).
-# AITER is cloned into 3rdparty/aiter/ on first use and checked out to the
+# AITER is cloned into build/third_party/aiter/ on first use and checked out to the
 # manifest's [qola] aiter_commit; --aiter-root is optional.
 qola build \
   --manifest example/te-manifest.toml \
@@ -50,7 +50,7 @@ qola build \
 | Option | Description |
 |---|---|
 | `--manifest` | Path to the TOML manifest file |
-| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/3rdparty/aiter`, cloned on demand) |
+| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/build/third_party/aiter`, cloned on demand) |
 | `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest's `[qola] aiter_commit`) |
 | `--patches-dir` | Directory of `*.patch` files applied on top of the AITER checkout (overrides manifest's `[qola] patches_dir`; defaults to `<QoLA repo>/patches/aiter`) |
 | `--output-dir` | Directory for build artifacts |

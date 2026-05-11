@@ -68,7 +68,7 @@ Namespace wrappers alone are not sufficient — AITER headers like `mha_fwd.h` d
 
 All builds and Python execution must happen inside the docker container (see parent repo CLAUDE.md). The host is for file reads, searches, and git only.
 
-`--aiter-root` is optional and defaults to `<QoLA repo>/3rdparty/aiter` — a git-ignored directory that QoLA clones `https://github.com/ROCm/aiter.git` into on first use. On every build the system fetches and checks out the AITER commit resolved per the precedence table above; pass `--aiter-commit <sha>` to override the manifest's `[qola] aiter_commit`.
+`--aiter-root` is optional and defaults to `<QoLA repo>/build/third_party/aiter` — a git-ignored directory that QoLA clones `https://github.com/ROCm/aiter.git` into on first use. On every build the system fetches and checks out the AITER commit resolved per the precedence table above; pass `--aiter-commit <sha>` to override the manifest's `[qola] aiter_commit`.
 
 ```bash
 # pybind mode (default), clones/updates AITER per the manifest commit
@@ -92,11 +92,11 @@ docker exec <container> python -m qola.cli build \
 
 ## AITER checkout
 
-AITER is **not** a submodule of this repo — it is cloned on demand into `3rdparty/aiter/` (git-ignored) by `qola.build_tools.submodule.ensure_aiter_commit`. Consumer manifests (`[qola] aiter_commit`, or `--aiter-commit`) pin the SHA on every build. Any QoLA commit can target any AITER commit by editing the manifest; nothing in this repo references a fixed AITER SHA.
+AITER is **not** a submodule of this repo — it is cloned on demand into `build/third_party/aiter/` (git-ignored) by `qola.build_tools.submodule.ensure_aiter_commit`. Consumer manifests (`[qola] aiter_commit`, or `--aiter-commit`) pin the SHA on every build. Any QoLA commit can target any AITER commit by editing the manifest; nothing in this repo references a fixed AITER SHA.
 
-If `3rdparty/aiter/` does not yet exist, the first build clones `https://github.com/ROCm/aiter.git` into it (partial clone, `--filter=blob:none`) and checks out the manifest's commit. Subsequent builds reuse the same checkout, fetching new commits as needed. Delete the directory to force a fresh clone.
+If `build/third_party/aiter/` does not yet exist, the first build clones `https://github.com/ROCm/aiter.git` into it (partial clone, `--filter=blob:none`) and checks out the manifest's commit. Subsequent builds reuse the same checkout, fetching new commits as needed. Delete the directory to force a fresh clone.
 
-Wipe-and-reapply policy: every build resets the AITER checkout to the requested commit (`git reset --hard`), force-syncs submodules (`git submodule update --init --recursive --force`), then reapplies QoLA's patches. Local edits in `3rdparty/aiter/` never survive a build — the patch directory is the only sanctioned way to carry deltas.
+Wipe-and-reapply policy: every build resets the AITER checkout to the requested commit (`git reset --hard`), force-syncs submodules (`git submodule update --init --recursive --force`), then reapplies QoLA's patches. Local edits in `build/third_party/aiter/` never survive a build — the patch directory is the only sanctioned way to carry deltas.
 
 ## AITER patches
 

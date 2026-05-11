@@ -3,11 +3,11 @@
 """On-the-fly AITER checkout management.
 
 AITER is *not* a submodule of QoLA — it is cloned on demand into a
-git-ignored directory (``<QoLA repo>/3rdparty/aiter`` by default).  The
-manifest's ``[qola] aiter_commit`` (or ``--aiter-commit``) pins which
-commit the build runs against, and ``[qola] patches_dir`` (or
-``--patches-dir``) carries QoLA-owned patches that are reapplied on top
-of that commit on every build.
+git-ignored directory (``<QoLA repo>/build/third_party/aiter`` by
+default).  The manifest's ``[qola] aiter_commit`` (or ``--aiter-commit``)
+pins which commit the build runs against, and ``[qola] patches_dir``
+(or ``--patches-dir``) carries QoLA-owned patches that are reapplied on
+top of that commit on every build.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from typing import Optional
 
 # QoLA repo root: <repo>/qola/build_tools/submodule.py -> <repo>
 _QOLA_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_AITER_ROOT = _QOLA_ROOT / "3rdparty" / "aiter"
+_DEFAULT_AITER_ROOT = _QOLA_ROOT / "build" / "third_party" / "aiter"
 _DEFAULT_PATCHES_DIR = _QOLA_ROOT / "patches" / "aiter"
 _AITER_REPO_URL = "https://github.com/ROCm/aiter.git"
 
 
 def default_aiter_root() -> str:
-    """Default path for the AITER checkout (``<QoLA repo>/3rdparty/aiter``).
+    """Default path for the AITER checkout (``<QoLA repo>/build/third_party/aiter``).
 
     Git-ignored at the QoLA level. The build system clones into it on first
     use; subsequent builds fetch and check out the requested commit.
