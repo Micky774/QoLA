@@ -39,6 +39,14 @@ def main(argv: list[str] | None = None) -> int:
         "against whatever is currently checked out.",
     )
     build_p.add_argument(
+        "--patches-dir",
+        default=None,
+        help="Directory of *.patch files to apply on top of the AITER "
+        "checkout (lex order, git apply --3way, hard-fail on conflict). "
+        "Overrides the manifest's [qola] patches_dir. Defaults to "
+        "<QoLA repo>/patches/aiter; point at an empty directory to skip.",
+    )
+    build_p.add_argument(
         "--output-dir",
         "-o",
         required=True,
@@ -82,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             verbose=args.verbose,
             build_mode=args.mode,
             aiter_commit=args.aiter_commit,
+            patches_dir=args.patches_dir,
         )
         s = result["summary"]
         print(

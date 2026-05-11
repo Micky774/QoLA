@@ -12,7 +12,8 @@ QoLA is designed for [Transformer Engine](https://github.com/NVIDIA/TransformerE
 - **Declarative manifests** — a single TOML file pins the AITER commit, target architectures, kernel modules, and MHA variant matrix
 - **torch-free builds** — `cpp_itfs` mode eliminates the PyTorch build dependency for C-linkable libraries
 - **Symbol isolation** — linker version scripts and C++ namespace wrapping prevent symbol collisions when multiple AITER-backed `.so` files coexist in one process
-- **No AITER modifications** — QoLA reconstructs AITER's build namespace without importing `aiter`, and compiles AITER sources unmodified
+- **Patch-based AITER deltas** — `patches/aiter/*.patch` is reapplied on top of the pinned AITER commit on every build, so bumping AITER becomes a patch rebase rather than maintaining a parallel fork branch
+- **No `import aiter`** — QoLA reconstructs AITER's build namespace from a source-tree path alone, avoiding `aiter/__init__.py` side effects and the torch import requirement
 
 ## Requirements
 
@@ -51,6 +52,7 @@ qola build \
 | `--manifest` | Path to the TOML manifest file |
 | `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/3rdparty/aiter`, cloned on demand) |
 | `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest's `[qola] aiter_commit`) |
+| `--patches-dir` | Directory of `*.patch` files applied on top of the AITER checkout (overrides manifest's `[qola] patches_dir`; defaults to `<QoLA repo>/patches/aiter`) |
 | `--output-dir` | Directory for build artifacts |
 | `--arch` | Target GPU architecture (repeatable, e.g. `--arch gfx950`) |
 | `--mode` | Build mode: `pybind` (default) or `cpp_itfs` |
@@ -64,6 +66,7 @@ The manifest is a TOML file that declares what to build. See [`example/te-manife
 [qola]
 aiter_commit = "33f2e6a..."   # Pinned AITER commit
 namespace = "te"               # C++ namespace and .so prefix
+patches_dir = "patches/aiter"  # Optional; overrides the default <QoLA repo>/patches/aiter
 rocm_versions = ["7.2"]
 
 [build]

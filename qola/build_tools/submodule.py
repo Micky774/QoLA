@@ -5,7 +5,9 @@
 AITER is *not* a submodule of QoLA — it is cloned on demand into a
 git-ignored directory (``<QoLA repo>/3rdparty/aiter`` by default).  The
 manifest's ``[qola] aiter_commit`` (or ``--aiter-commit``) pins which
-commit the build runs against.
+commit the build runs against, and ``[qola] patches_dir`` (or
+``--patches-dir``) carries QoLA-owned patches that are reapplied on top
+of that commit on every build.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Optional
 # QoLA repo root: <repo>/qola/build_tools/submodule.py -> <repo>
 _QOLA_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_AITER_ROOT = _QOLA_ROOT / "3rdparty" / "aiter"
+_DEFAULT_PATCHES_DIR = _QOLA_ROOT / "patches" / "aiter"
 _AITER_REPO_URL = "https://github.com/ROCm/aiter.git"
 
 
@@ -29,20 +32,36 @@ def default_aiter_root() -> str:
     return str(_DEFAULT_AITER_ROOT)
 
 
-def ensure_aiter_commit(aiter_root: str, commit: Optional[str]) -> None:
-    """Ensure *aiter_root* is a git checkout at *commit*.
+def default_patches_dir() -> str:
+    """Default path for QoLA-owned AITER patches (``<QoLA repo>/patches/aiter``)."""
+    return str(_DEFAULT_PATCHES_DIR)
+
+
+def ensure_aiter_commit(
+    aiter_root: str,
+    commit: Optional[str],
+    patches_dir: Optional[str] = None,
+) -> None:
+    """Ensure *aiter_root* is a clean checkout of *commit* with patches applied.
 
     Clones ``ROCm/aiter`` into *aiter_root* if no git tree exists there.
-    Once a checkout is present, fetches and checks out *commit* using the
-    same dirty-tree policy as before: if the tree's HEAD already matches
-    *commit*, the working copy is left alone (a dirty tree is permitted in
-    that case); a dirty tree combined with a different requested commit is
-    an error.
+    Then on every call (regardless of current HEAD or working-tree state):
 
-    No-op when *commit* is ``None`` and the checkout already exists —
-    builds against whatever is currently checked out.  When *commit* is
-    ``None`` and the checkout is missing, raises (we don't know what to
-    clone to).
+    1. Fetches *commit* from origin if it isn't already present locally.
+    2. ``git reset --hard`` to *commit* — wipes any local edits.
+    3. ``git submodule update --init --recursive --force`` — resyncs CK
+       and any other AITER submodules to the recorded commits.
+    4. Applies every ``*.patch`` file in *patches_dir* in lexicographic
+       order via ``git apply --3way``. The first failing patch aborts the
+       build with a pointer at the offending file.
+
+    Local edits to the AITER checkout never survive a build — patches are
+    the only sanctioned way to carry deltas. To skip the patch step,
+    point *patches_dir* at an empty directory or ``/dev/null``.
+
+    *commit* may be ``None`` only when the checkout already exists; in
+    that case the function still resets to the current HEAD (clearing
+    any dirty state) and reapplies patches.
     """
     root = Path(aiter_root)
     is_checkout = (root / ".git").exists()
@@ -57,26 +76,55 @@ def ensure_aiter_commit(aiter_root: str, commit: Optional[str]) -> None:
         _clone(aiter_root)
 
     if commit is None:
-        return
+        target = _git(aiter_root, "rev-parse", "HEAD").strip()
+    else:
+        target = _resolve_commit(aiter_root, commit)
 
-    target = _resolve_commit(aiter_root, commit)
     head = _git(aiter_root, "rev-parse", "HEAD").strip()
+    if head != target:
+        print(f"[QoLA] Checking out AITER {target} (was {head})")
+    _git(aiter_root, "reset", "--hard", target)
+    _git(aiter_root, "submodule", "update", "--init", "--recursive", "--force")
 
-    if head == target:
+    _apply_patches(aiter_root, patches_dir)
+
+
+def _apply_patches(aiter_root: str, patches_dir: Optional[str]) -> None:
+    """Apply every ``*.patch`` in *patches_dir* on top of *aiter_root*.
+
+    Patches are applied with ``git apply --3way`` in sorted filename
+    order. The first failing patch raises ``RuntimeError`` so the build
+    surfaces the breakage instead of running with a half-patched tree.
+
+    No-op when *patches_dir* is ``None``, missing, or contains no
+    ``*.patch`` files.
+    """
+    if patches_dir is None:
+        return
+    patches_root = Path(patches_dir)
+    if not patches_root.is_dir():
         return
 
-    porcelain = _git(aiter_root, "status", "--porcelain").strip()
-    if porcelain:
-        raise RuntimeError(
-            f"AITER tree at {aiter_root!r} is dirty; refusing to checkout "
-            f"{target} over local changes:\n{porcelain}\n"
-            f"Either commit/stash/discard the changes, or pin the manifest "
-            f"to the currently-checked-out commit ({head})."
-        )
+    patches = sorted(patches_root.glob("*.patch"))
+    if not patches:
+        return
 
-    print(f"[QoLA] Checking out AITER {target} (was {head})")
-    _git(aiter_root, "checkout", "--detach", target)
-    _git(aiter_root, "submodule", "update", "--init", "--recursive")
+    print(f"[QoLA] Applying {len(patches)} patch(es) from {patches_dir}")
+    for patch in patches:
+        print(f"[QoLA]   - {patch.name}")
+        # Resolve to absolute — git apply -C <dir> looks up relative paths
+        # under <dir>, not under our CWD.
+        patch_abs = str(patch.resolve())
+        try:
+            _git(aiter_root, "apply", "--3way", "--whitespace=nowarn", patch_abs)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"Failed to apply QoLA patch {patch} to AITER at "
+                f"{aiter_root!r}.\n"
+                f"git apply stderr:\n{exc.stderr}\n"
+                f"Either rebase the patch against the current AITER "
+                f"commit, or pin the manifest back to a compatible commit."
+            ) from exc
 
 
 def _clone(aiter_root: str) -> None:

@@ -20,7 +20,7 @@ except ModuleNotFoundError:
 
 from .config import BuildSpec, load_manifest
 from .resolver import AiterNamespace, build_namespace, load_build_module_fn
-from .submodule import default_aiter_root, ensure_aiter_commit
+from .submodule import default_aiter_root, default_patches_dir, ensure_aiter_commit
 
 
 def build_kernels(
@@ -32,6 +32,7 @@ def build_kernels(
     verbose: bool = False,
     build_mode: Optional[str] = None,
     aiter_commit: Optional[str] = None,
+    patches_dir: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build AITER kernel modules from a consumer manifest.
 
@@ -61,6 +62,12 @@ def build_kernels(
         AITER commit to checkout in *aiter_root* before building.  When
         provided, overrides the manifest's ``[qola] aiter_commit``.  When
         unset everywhere, builds against whatever is currently checked out.
+    patches_dir
+        Directory of ``*.patch`` files to apply on top of the AITER
+        checkout (lex order, ``git apply --3way``, hard-fail on conflict).
+        When provided, overrides the manifest's ``[qola] patches_dir``.
+        Defaults to ``<QoLA repo>/patches/aiter``.  Pass an empty or
+        non-existent directory to skip patching.
 
     Returns
     -------
@@ -84,8 +91,14 @@ def build_kernels(
 
     # Resolve and apply AITER commit before any path resolution that depends
     # on the AITER tree contents.
-    effective_commit = aiter_commit or manifest.get("qola", {}).get("aiter_commit")
-    ensure_aiter_commit(aiter_root, effective_commit)
+    qola_section = manifest.get("qola", {})
+    effective_commit = aiter_commit or qola_section.get("aiter_commit")
+    effective_patches_dir = (
+        patches_dir
+        or qola_section.get("patches_dir")
+        or default_patches_dir()
+    )
+    ensure_aiter_commit(aiter_root, effective_commit, effective_patches_dir)
 
     # Fall back to manifest's [build] architectures when not specified via CLI.
     if not archs:

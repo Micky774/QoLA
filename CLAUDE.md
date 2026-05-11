@@ -36,6 +36,7 @@ CLI flags win over manifest globals; per-module entries (most specific scope) st
 | Build mode       | `[[modules]].mode` → CLI `--mode` → `[build].mode` → `"pybind"` default                  |
 | GPU architectures| CLI `--arch` (repeatable) → `[build].architectures` → `$GPU_ARCHS` → `"native"`          |
 | AITER commit     | CLI `--aiter-commit` → `[qola].aiter_commit` → currently checked-out HEAD                |
+| AITER patches    | CLI `--patches-dir` → `[qola].patches_dir` → `<QoLA repo>/patches/aiter`                 |
 
 A flag is "set" only when explicitly passed; argparse defaults to `None` for `--mode` so it cannot accidentally override a manifest value. Per-module overrides are an opt-out from a CLI-wide blanket: `qola build --mode cpp_itfs` builds everything in `cpp_itfs` *except* modules that pin `mode = "pybind"` in `[[modules]]`.
 
@@ -95,4 +96,14 @@ AITER is **not** a submodule of this repo — it is cloned on demand into `3rdpa
 
 If `3rdparty/aiter/` does not yet exist, the first build clones `https://github.com/ROCm/aiter.git` into it (partial clone, `--filter=blob:none`) and checks out the manifest's commit. Subsequent builds reuse the same checkout, fetching new commits as needed. Delete the directory to force a fresh clone.
 
-Dirty-tree policy: when the requested commit equals the current HEAD, the working copy is left alone (local hacks survive). When a *different* commit is requested and the tree is dirty, the build aborts rather than discarding work — commit, stash, or pin the manifest to the current HEAD to proceed. Do not modify AITER source here for permanent changes; maintain patches in a QoLA-specific AITER feature branch.
+Wipe-and-reapply policy: every build resets the AITER checkout to the requested commit (`git reset --hard`), force-syncs submodules (`git submodule update --init --recursive --force`), then reapplies QoLA's patches. Local edits in `3rdparty/aiter/` never survive a build — the patch directory is the only sanctioned way to carry deltas.
+
+## AITER patches
+
+QoLA ships a `patches/aiter/` directory of unified-diff `*.patch` files that get applied (lex order, `git apply --3way`) on top of the pinned AITER commit on every build. This decouples the upstream AITER SHA from the deltas TE needs — bumping AITER becomes a rebase of the patch set, not maintenance of a parallel AITER fork branch.
+
+- Paths inside patches are relative to the AITER root. CK lives at AITER's `3rdparty/composable_kernel/` as a submodule, so a CK fix lives at `3rdparty/composable_kernel/...` in the patch. Because `git apply --3way`'s merge fallback only reads blobs from the parent index, stale CK patches fail outright (no auto-merge) and must be rebased.
+- A failing patch hard-aborts the build (no `--reject` files, no skips). Either rebase the patch or pin the manifest back to a compatible commit.
+- Override location with `--patches-dir <dir>` or `[qola] patches_dir = "..."`. Point at an empty/non-existent directory to skip the patch step.
+
+See `patches/aiter/README.md` for the full convention.
