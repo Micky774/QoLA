@@ -30,6 +30,8 @@ pip install -e .
 
 ## Quick Start
 
+### `qola build` — build kernels from a manifest
+
 ```bash
 # Build all modules declared in a manifest (pybind mode).
 # AITER is cloned into build/third_party/aiter/ on first use and checked out to the
@@ -45,7 +47,7 @@ qola build \
   --mode cpp_itfs
 ```
 
-### CLI Options
+#### `qola build` options
 
 | Option | Description |
 |---|---|
@@ -57,6 +59,44 @@ qola build \
 | `--arch` | Target GPU architecture (repeatable, e.g. `--arch gfx950`) |
 | `--mode` | Build mode: `pybind` (default) or `cpp_itfs` |
 | `--verbose` | Enable verbose build output |
+
+### `qola checkout` — prepare an AITER source tree without building
+
+Runs only the AITER-prep phase of `qola build`: clones (if needed), fetches and checks out the requested commit, force-syncs submodules, and applies `patches/aiter/*.patch`. Useful when downstream consumers want a patched AITER source tree to inspect, run their own builds against, or feed into another tool.
+
+```bash
+# Manifest-driven: pin the commit + patches via [qola] in the manifest
+qola checkout --manifest example/te-manifest.toml
+
+# Explicit overrides without a manifest
+qola checkout --aiter-commit d32b0cb62 --patches-dir patches/aiter
+
+# Re-apply patches to whatever is currently checked out
+# (only valid if build/third_party/aiter/ already exists)
+qola checkout
+```
+
+Prints `AITER ready at <abs-path>` on success. Hard-fails on patch conflict — same `git apply --3way` semantics as `qola build`.
+
+#### `qola checkout` options
+
+| Option | Description |
+|---|---|
+| `--manifest` | *Optional.* TOML manifest; `[qola] aiter_commit` and `[qola] patches_dir` are read as fallbacks for the corresponding flags |
+| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/build/third_party/aiter`, cloned on demand) |
+| `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest) |
+| `--patches-dir` | Directory of `*.patch` files (overrides manifest; defaults to `<QoLA repo>/patches/aiter`; point at an empty dir to skip patching) |
+
+The same logic is exposed for programmatic use:
+
+```python
+from qola.build_tools import checkout_aiter
+
+aiter_root = checkout_aiter(manifest_path="example/te-manifest.toml")
+# aiter_root is now an absolute path to a clean, patched AITER checkout
+```
+
+`qola build` itself routes through `checkout_aiter`, so the two commands are guaranteed to produce identical AITER trees from identical inputs.
 
 ## Manifest Format
 

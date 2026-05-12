@@ -20,7 +20,7 @@ except ModuleNotFoundError:
 
 from .config import BuildSpec, load_manifest
 from .resolver import AiterNamespace, build_namespace, load_build_module_fn
-from .submodule import default_aiter_root, default_patches_dir, ensure_aiter_commit
+from .submodule import checkout_aiter
 
 
 def build_kernels(
@@ -74,9 +74,6 @@ def build_kernels(
     dict
         Contents of the written ``manifest.json``.
     """
-    if aiter_root is None:
-        aiter_root = default_aiter_root()
-    aiter_root = str(Path(aiter_root).resolve())
     output_dir = str(Path(output_dir).resolve())
     manifest_path = str(Path(manifest_path).resolve())
 
@@ -84,25 +81,20 @@ def build_kernels(
     prev_gpu_archs = os.environ.get("GPU_ARCHS")
     prev_jit_dir = os.environ.get("AITER_JIT_DIR")
 
-    # Read manifest once for archs and aiter_commit fallbacks (load_manifest
-    # re-parses it later for the full module schema).
-    with open(manifest_path, "rb") as f:
-        manifest = tomllib.load(f)
-
-    # Resolve and apply AITER commit before any path resolution that depends
-    # on the AITER tree contents.
-    qola_section = manifest.get("qola", {})
-    effective_commit = aiter_commit or qola_section.get("aiter_commit")
-    effective_patches_dir = (
-        patches_dir
-        or qola_section.get("patches_dir")
-        or default_patches_dir()
+    # Resolve + check out AITER (commit + patches) before any path resolution
+    # that depends on the tree contents.  Same precedence as `qola checkout`:
+    # CLI flag > manifest [qola] > default.
+    aiter_root = checkout_aiter(
+        manifest_path=manifest_path,
+        aiter_root=aiter_root,
+        aiter_commit=aiter_commit,
+        patches_dir=patches_dir,
     )
-    ensure_aiter_commit(aiter_root, effective_commit, effective_patches_dir)
 
     # Fall back to manifest's [build] architectures when not specified via CLI.
     if not archs:
-        archs = manifest.get("build", {}).get("architectures")
+        with open(manifest_path, "rb") as f:
+            archs = tomllib.load(f).get("build", {}).get("architectures")
 
     if archs:
         os.environ["GPU_ARCHS"] = ";".join(archs)
