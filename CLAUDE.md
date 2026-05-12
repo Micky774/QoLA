@@ -64,6 +64,10 @@ Use `QOLA_NS(sym)` macro in C++ to reference the correctly-namespaced symbol.
 
 Namespace wrappers alone are not sufficient — AITER headers like `mha_fwd.h` declare functions with explicit `__attribute__((visibility("default")))`, which overrides `-fvisibility=hidden` and would leak `aiter::*` symbols into the final `.so`. All cpp_itfs modules **must** be linked with `qola_exports.lds` (`-Wl,--version-script,qola/cpp_itfs/qola_exports.lds`) to force all non-`qola::*` symbols local. The `[defaults]` section in `registry.toml` specifies this version script.
 
+### CK codegen receipt (`receipt`)
+
+Per-module manifest field that overrides the `--receipt N` argument in every `blob_gen_cmd` entry from `optCompilerConfig.json` (which defaults to 600 — the generic `aiter::mha_*` C++ API filter). Receipt 700 is a TransformerEngine-specific filter that drops fp8, qscale, logits, skip/sink, and non-row vlayout instances; this shrinks fwd codegen ~10x vs 600. Set in the manifest as `receipt = 700` under `[[modules]]`. Implemented as a post-eval regex rewrite of `spec.blob_gen_cmd` in `_rewrite_receipt` (config.py).
+
 ## Running builds
 
 All builds and Python execution must happen inside the docker container (see parent repo CLAUDE.md). The host is for file reads, searches, and git only.

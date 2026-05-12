@@ -76,12 +76,14 @@ architectures = ["gfx950"]
 [[modules]]
 name = "libmha_fwd"
 mode = "cpp_itfs"
+receipt = 700                       # CK codegen filter (default: optCompilerConfig value, typically 600)
 drop_srcs = ["mha_fwd_split.cu", "mha_fwd_batch_prefill.cu"]
 drop_directions = ["fwd_splitkv", "batch_prefill"]
 
 [[modules]]
 name = "libmha_bwd"
 mode = "cpp_itfs"
+receipt = 700
 
 # MHA variant matrix — Cartesian expansion of CK codegen filters
 [[mha_fwd_variants]]
@@ -147,6 +149,8 @@ Two layers prevent symbol leaks when multiple `.so` files coexist:
 
 The manifest's `[[mha_fwd_variants]]` / `[[mha_bwd_variants]]` sections declare option dimensions (dtype, has_bias, has_mask, etc.) that are expanded into CK codegen filter patterns. This controls which of the ~34K possible kernel instances are actually compiled. See [`variant_matrix.py`](qola/build_tools/variant_matrix.py). This is currently only support for pybind11 output.
 
+For `cpp_itfs` static modules, kernel pruning is instead controlled by the `receipt` manifest field, which overrides the `--receipt N` argument passed to CK's `generate.py`. AITER's `optCompilerConfig.json` defaults to receipt 600 (the generic `aiter::mha_*` C++ API filter); setting `receipt = 700` selects the TransformerEngine-specific filter (fp16/bf16, row vlayout, has_lse, no skip/sink/logits/qscale), shrinking forward codegen by roughly 48×. See `_rewrite_receipt` in [`config.py`](qola/build_tools/config.py) for the implementation.
+
 ### HSA Blob Embedding
 
 [`generate_embedded_hsa.py`](qola/build_tools/generate_embedded_hsa.py) converts binary `.co` ASM blobs into a C++ header with compile-time byte arrays, enabling kernel distribution without a runtime `AITER_ASM_DIR`.
@@ -159,4 +163,4 @@ The manifest's `[[mha_fwd_variants]]` / `[[mha_bwd_variants]]` sections declare 
 
 ## License
 
-See the parent repository for license terms.
+MIT License. See `LICENSE` for more details.
