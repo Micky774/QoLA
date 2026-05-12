@@ -17,9 +17,10 @@ change any generated output.
 Upstream PR: https://github.com/ROCm/rocm-libraries/pull/6867
 
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
+index 8c006c09d..96f8d7678 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
-@@ -878,6 +878,8 @@ def get_fwd_blobs(
+@@ -866,6 +866,8 @@ def get_fwd_blobs(
                          cond &= pipeline.F_qscale == "no"
                          if not cond:
                              continue
@@ -29,6 +30,7 @@ diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha
                      # fp32 only
                      if receipt == 800 or receipt == 801:
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
+index 7105f1aa5..9ce7f543d 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
 @@ -1145,6 +1145,12 @@ def get_bwd_blobs(
@@ -45,9 +47,10 @@ diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha
              # fp32 only, all variations
              if receipt == 800:
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
+index c64a19104..ffa3403e8 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
-@@ -1453,6 +1453,20 @@ def fit(problem_ctx: ProblemContext, kernel_ctx: KernelContext) -> bool:
+@@ -1455,6 +1455,20 @@ def get_product(receipt: int) -> Product:
              return cond
 
          return Product(name="aiter::mha_fwd C++ api integration", rule=fit)
@@ -69,6 +72,7 @@ diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha
 
          def fit(problem_ctx: ProblemContext, kernel_ctx: KernelContext) -> bool:
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
+index c9bac50da..f0396ed5e 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
 @@ -970,6 +970,8 @@ def get_fwd_splitkv_blobs(
@@ -81,6 +85,7 @@ diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha
                  # fp32 only
                  if receipt == 800 or receipt == 801:
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
+index 1ac1f1c38..7c7bddb34 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
 @@ -745,6 +745,8 @@ def get_fwd_blobs(
@@ -93,9 +98,10 @@ diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha
                  # fp32 only
                  if receipt == 800 or receipt == 801:
 diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
+index a5a2d0856..434e1cab7 100644
 --- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
 +++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
-@@ -139,7 +139,9 @@ def list_blobs(
+@@ -139,7 +139,9 @@ if __name__ == "__main__":
          + "  200-299: Only generate instance for Aiter(mha_varlen_fwd) integration\n"
          + "  300-399: Only generate instance for Aiter(mha_bwd) integration\n"
          + "  400-499: Only generate instance for Aiter(mha_varlen_bwd) integration\n"
