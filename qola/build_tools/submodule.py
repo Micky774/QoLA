@@ -143,9 +143,17 @@ def ensure_aiter_commit(
 def _apply_patches(aiter_root: str, patches_dir: Optional[str]) -> None:
     """Apply every ``*.patch`` in *patches_dir* on top of *aiter_root*.
 
-    Patches are applied with ``git apply --3way`` in sorted filename
-    order. The first failing patch raises ``RuntimeError`` so the build
-    surfaces the breakage instead of running with a half-patched tree.
+    Patches are applied in sorted filename order. Each patch is first
+    tried with ``git apply --3way`` so that small context drifts can be
+    auto-resolved against the parent index. If that fails, we retry
+    with plain ``git apply`` — this covers patches whose targets live
+    inside an AITER submodule (e.g. ``3rdparty/composable_kernel/...``):
+    ``--3way`` rejects those upfront with "does not exist in index"
+    because the parent's index only carries a 160000 gitlink for the
+    submodule path, while plain apply reads files from the working
+    tree and tolerates submodule paths. The first patch that fails
+    both attempts raises ``RuntimeError`` so the build surfaces the
+    breakage instead of running with a half-patched tree.
 
     No-op when *patches_dir* is ``None``, missing, or contains no
     ``*.patch`` files.
@@ -168,14 +176,18 @@ def _apply_patches(aiter_root: str, patches_dir: Optional[str]) -> None:
         patch_abs = str(patch.resolve())
         try:
             _git(aiter_root, "apply", "--3way", "--whitespace=nowarn", patch_abs)
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(
-                f"Failed to apply QoLA patch {patch} to AITER at "
-                f"{aiter_root!r}.\n"
-                f"git apply stderr:\n{exc.stderr}\n"
-                f"Either rebase the patch against the current AITER "
-                f"commit, or pin the manifest back to a compatible commit."
-            ) from exc
+        except subprocess.CalledProcessError as exc_3way:
+            try:
+                _git(aiter_root, "apply", "--whitespace=nowarn", patch_abs)
+            except subprocess.CalledProcessError as exc_plain:
+                raise RuntimeError(
+                    f"Failed to apply QoLA patch {patch} to AITER at "
+                    f"{aiter_root!r}.\n"
+                    f"git apply --3way stderr:\n{exc_3way.stderr}\n"
+                    f"git apply (plain) stderr:\n{exc_plain.stderr}\n"
+                    f"Either rebase the patch against the current AITER "
+                    f"commit, or pin the manifest back to a compatible commit."
+                ) from exc_plain
 
 
 def _clone(aiter_root: str) -> None:
