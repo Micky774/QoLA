@@ -3,5 +3,6 @@
 """AOTA build layer — manifest-driven ahead-of-time AITER kernel compilation."""
 
 from .builder import build_kernels
+from .submodule import checkout_aiter
 
-__all__ = ["build_kernels"]
+__all__ = ["build_kernels", "checkout_aiter"]

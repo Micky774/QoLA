@@ -16,6 +16,11 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
+
 # QoLA repo root: <repo>/qola/build_tools/submodule.py -> <repo>
 _QOLA_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_AITER_ROOT = _QOLA_ROOT / "build" / "third_party" / "aiter"
@@ -35,6 +40,52 @@ def default_aiter_root() -> str:
 def default_patches_dir() -> str:
     """Default path for QoLA-owned AITER patches (``<QoLA repo>/patches/aiter``)."""
     return str(_DEFAULT_PATCHES_DIR)
+
+
+def checkout_aiter(
+    manifest_path: Optional[str] = None,
+    aiter_root: Optional[str] = None,
+    aiter_commit: Optional[str] = None,
+    patches_dir: Optional[str] = None,
+) -> str:
+    """Resolve the AITER checkout + patch step from manifest/CLI inputs.
+
+    High-level entry point shared by ``qola checkout`` and downstream
+    Python consumers that want a patched AITER tree without running a
+    full kernel build.  Applies the same precedence as ``build_kernels``:
+
+    - ``aiter_root``: argument > ``default_aiter_root()``
+    - ``aiter_commit``: argument > manifest's ``[qola] aiter_commit`` >
+      None (reset to current HEAD; only valid if the checkout exists)
+    - ``patches_dir``: argument > manifest's ``[qola] patches_dir`` >
+      ``default_patches_dir()``
+
+    Returns the absolute path to the prepared AITER root.
+
+    Raises
+    ------
+    RuntimeError
+        If the checkout does not exist and no commit was specified
+        anywhere, or if a patch fails to apply.
+    """
+    if aiter_root is None:
+        aiter_root = default_aiter_root()
+    aiter_root = str(Path(aiter_root).resolve())
+
+    qola_section: dict = {}
+    if manifest_path is not None:
+        with open(manifest_path, "rb") as f:
+            qola_section = tomllib.load(f).get("qola", {})
+
+    effective_commit = aiter_commit or qola_section.get("aiter_commit")
+    effective_patches_dir = (
+        patches_dir
+        or qola_section.get("patches_dir")
+        or default_patches_dir()
+    )
+
+    ensure_aiter_commit(aiter_root, effective_commit, effective_patches_dir)
+    return aiter_root
 
 
 def ensure_aiter_commit(
