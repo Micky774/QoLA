@@ -174,7 +174,7 @@ def load_manifest(
                 spec.hsa_subdirs = mapping.get("hsa_subdirs", [])
 
         if namespace:
-            spec.md_name = f"{namespace}_{spec.md_name}"
+            spec.md_name = f"{spec.md_name}_{namespace}"
 
         specs.append(spec)
 
@@ -188,7 +188,7 @@ def load_manifest(
         mha_specs = expand_mha_variants(fwd_section, ns)
         if namespace:
             for spec in mha_specs:
-                spec.md_name = f"{namespace}_{spec.md_name}"
+                spec.md_name = f"{spec.md_name}_{namespace}"
         specs.extend(mha_specs)
 
     return specs

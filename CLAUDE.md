@@ -54,7 +54,7 @@ Each cpp_itfs wrapper replaces the pybind entry point + torch interface with a r
 ### Symbol collision prevention
 
 The manifest's `[qola] namespace = "te"` causes:
-- `.so` name prefix: `te_libmha_fwd.so`
+- `.so` name suffix: `libmha_fwd_te.so` (preserves the `lib` prefix so `-lmha_fwd_te` works)
 - C++ namespace: `qola::te::mha_fwd()`
 - Compile flag: `-DQOLA_NAMESPACE=te`
 
