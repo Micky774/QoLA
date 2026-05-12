@@ -1,0 +1,108 @@
+Subject: CK: add FMHA receipt 700 (TransformerEngine integration)
+
+Mirror of ROCm/rocm-libraries#6867 ("Added custom FMHA codegen receipt
+for TransformerEngine"), rebased onto AITER's vendored CK layout
+(3rdparty/composable_kernel/...). Adds a TE-specific receipt that
+generates a much smaller kernel set than receipt 600:
+
+  - fwd:  fp16/bf16 only, row vlayout, has_lse, no skip/sink/logits/qscale
+  - bwd:  fp16/bf16 only, dropout in {no, dropout_wg32, dropout_wg16}
+  - splitkv / batch_prefill / pagedkv_prefill: skipped (TE does not use)
+
+To actually exercise this receipt, switch the libmha_fwd / libmha_bwd
+blob_gen_cmd entries from `--receipt 600` to `--receipt 700`. Until
+that switch lands, this patch only adds the receipt; it does not
+change any generated output.
+
+Upstream PR: https://github.com/ROCm/rocm-libraries/pull/6867
+
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_batch_prefill.py
+@@ -878,6 +878,8 @@ def get_fwd_blobs(
+                         cond &= pipeline.F_qscale == "no"
+                         if not cond:
+                             continue
++                    elif receipt == 700:
++                        continue  # TE does not use this API
+
+                     # fp32 only
+                     if receipt == 800 or receipt == 801:
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_bwd.py
+@@ -1145,6 +1145,12 @@ def get_bwd_blobs(
+                 cond = dtype in ["fp16", "bf16"]
+                 if not cond:
+                     continue
++            # TransformerEngine integration
++            elif receipt == 700:
++                cond = dtype in ["fp16", "bf16"]
++                cond &= dropout in ["no", "dropout_wg32", "dropout_wg16"]
++                if not cond:
++                    continue
+
+             # fp32 only, all variations
+             if receipt == 800:
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd.py
+@@ -1453,6 +1453,20 @@ def fit(problem_ctx: ProblemContext, kernel_ctx: KernelContext) -> bool:
+             return cond
+
+         return Product(name="aiter::mha_fwd C++ api integration", rule=fit)
++    # TransformerEngine integration
++    elif receipt == 700:
++
++        def fit(problem_ctx: ProblemContext, kernel_ctx: KernelContext) -> bool:
++            cond = problem_ctx.dtype in ["fp16", "bf16"]
++            cond &= kernel_ctx.pipeline.F_vlayout == "row"
++            cond &= kernel_ctx.pipeline.F_qscale == "no"
++            cond &= kernel_ctx.pipeline.F_lse == "t"
++            cond &= kernel_ctx.pipeline.F_skip == "f"
++            cond &= kernel_ctx.pipeline.F_sink == "f"
++            cond &= kernel_ctx.pipeline.F_logits == "f"
++            return cond
++
++        return Product(name="TransformerEngine integration", rule=fit)
+     elif receipt == 888:
+
+         def fit(problem_ctx: ProblemContext, kernel_ctx: KernelContext) -> bool:
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_fwd_splitkv.py
+@@ -970,6 +970,8 @@ def get_fwd_splitkv_blobs(
+                     cond &= pipeline.F_squant == "f"
+                     if not cond:
+                         continue
++                elif receipt == 700:
++                    continue  # TE does not use this API
+
+                 # fp32 only
+                 if receipt == 800 or receipt == 801:
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/codegen/ops/fmha_pagedkv_prefill.py
+@@ -745,6 +745,8 @@ def get_fwd_blobs(
+                     cond &= pipeline.F_squant == "f"
+                     if not cond:
+                         continue
++                elif receipt == 700:
++                    continue  # TE does not use this API
+
+                 # fp32 only
+                 if receipt == 800 or receipt == 801:
+diff --git a/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py b/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
+--- a/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
++++ b/3rdparty/composable_kernel/example/ck_tile/01_fmha/generate.py
+@@ -139,7 +139,9 @@ def list_blobs(
+         + "  200-299: Only generate instance for Aiter(mha_varlen_fwd) integration\n"
+         + "  300-399: Only generate instance for Aiter(mha_bwd) integration\n"
+         + "  400-499: Only generate instance for Aiter(mha_varlen_bwd) integration\n"
+-        + "  600-699: Only generate instance for aiter::mha_fwd && aiter::mha_fwd_splitkv && aiter::mha_bwd C++ api integration",
++        + "  600-699: Only generate instance for aiter::mha_fwd && aiter::mha_fwd_splitkv && aiter::mha_bwd C++ api integration\n"
++        + "  700: Only generate instance for TransformerEngine integration (fwd + bwd, fp16/bf16 only,\n"
++        + "        invariants: row vlayout, has_lse, no skip/sink/logits/qscale)",
+     )
+
+     parser.add_argument(

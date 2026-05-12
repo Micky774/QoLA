@@ -7,10 +7,23 @@
 # when building in cpp_itfs (torch-free) mode.
 #
 # For each module:
-#   drop_srcs    - basenames of pybind sources to remove from the
-#                  optCompilerConfig srcs list.
-#   add_srcs     - QoLA cpp_itfs source files to add (relative to QoLA root).
-#   add_includes - extra include directories (relative to QoLA root).
+#   drop_srcs            - basenames of pybind sources to remove from the
+#                          optCompilerConfig srcs list.
+#   add_srcs             - QoLA cpp_itfs source files to add (relative to
+#                          QoLA root).
+#   add_includes         - extra include directories (relative to QoLA root).
+#   add_flags_extra_hip  - extra ``-D`` flags appended to ``flags_extra_hip``.
+#                          Use these for cpp_itfs mode requirements that
+#                          don't belong in the upstream optCompilerConfig
+#                          (e.g. enabling FAV2/FAV3 dispatch paths in
+#                          ``mha_fwd.cu``).  Plain strings, no eval.
+#   add_blob_gen_cmd     - extra ``blob_gen_cmd`` entries appended to the
+#                          upstream list.  Strings are ``str.format``-ed
+#                          against the AITER eval namespace, so e.g.
+#                          ``{AITER_META_DIR}`` resolves to the meta dir
+#                          path.  Use ``{{}}`` for the literal ``{}``
+#                          placeholder that ``core.py`` later substitutes
+#                          with the per-module blob output directory.
 #
 # All cpp_itfs modules MUST be linked with qola_exports.lds to hide
 # AITER-internal symbols.  Some AITER headers (e.g. mha_fwd.h) declare
@@ -27,9 +40,20 @@ drop_srcs    = []
 add_srcs     = ["qola/cpp_itfs/qola_mha_fwd.cu"]
 add_includes = ["qola/cpp_itfs"]
 hsa_subdirs  = ["fmha_v3_fwd"]
+# FAV3_ON enables the asm v3 dispatch in mha_fwd.cu; FAV2_ON enables the
+# CK-tile fallback for configs v3 doesn't cover (non-bf16, hdim != 128/192,
+# non-gfx942/950, etc.).  Both are required for libmha_fwd to function.
+add_flags_extra_hip = ["-DFAV3_ON=1", "-DFAV2_ON=1"]
+# Bake fmha_v3_fwd ASM blobs into the .so via the embedded HSA header.
+add_blob_gen_cmd = [
+    "{AITER_META_DIR}/hsa/codegen.py -m fmha_v3_fwd --output_dir {{}}",
+]
 
 [libmha_bwd]
 drop_srcs    = []
 add_srcs     = ["qola/cpp_itfs/qola_mha_bwd.cu"]
 add_includes = ["qola/cpp_itfs"]
 hsa_subdirs  = ["fmha_v3_bwd"]
+add_blob_gen_cmd = [
+    "{AITER_META_DIR}/hsa/codegen.py -m fmha_v3_bwd --output_dir {{}}",
+]

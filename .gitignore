@@ -213,3 +213,9 @@ __marimo__/
 .claude
 .codex
 .cline_storage
+
+# AITER source tree — cloned on demand by qola.build_tools.submodule
+# at <QoLA repo>/build/third_party/aiter.  Pinned per-build by manifests,
+# not by a submodule reference in this repo.  Already covered by the
+# top-level "build/" rule above; documented here so the convention is
+# discoverable.

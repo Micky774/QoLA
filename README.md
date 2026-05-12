@@ -12,13 +12,14 @@ QoLA is designed for [Transformer Engine](https://github.com/NVIDIA/TransformerE
 - **Declarative manifests** — a single TOML file pins the AITER commit, target architectures, kernel modules, and MHA variant matrix
 - **torch-free builds** — `cpp_itfs` mode eliminates the PyTorch build dependency for C-linkable libraries
 - **Symbol isolation** — linker version scripts and C++ namespace wrapping prevent symbol collisions when multiple AITER-backed `.so` files coexist in one process
-- **No AITER modifications** — QoLA reconstructs AITER's build namespace without importing `aiter`, and compiles AITER sources unmodified
+- **Patch-based AITER deltas** — `patches/aiter/*.patch` is reapplied on top of the pinned AITER commit on every build, so bumping AITER becomes a patch rebase rather than maintaining a parallel fork branch
+- **No `import aiter`** — QoLA reconstructs AITER's build namespace from a source-tree path alone, avoiding `aiter/__init__.py` side effects and the torch import requirement
 
 ## Requirements
 
 - Python >= 3.10
 - ROCm / HIP toolchain (hipcc)
-- AITER source tree (included as a git submodule at `3rdparty/aiter/`)
+- AITER source tree (cloned on demand into `build/third_party/aiter/` — git-ignored, not a submodule; the manifest's `[qola] aiter_commit` pins the SHA)
 - PyTorch (pybind mode only)
 
 ## Installation
@@ -29,31 +30,73 @@ pip install -e .
 
 ## Quick Start
 
+### `qola build` — build kernels from a manifest
+
 ```bash
-# Build all modules declared in a manifest (pybind mode)
+# Build all modules declared in a manifest (pybind mode).
+# AITER is cloned into build/third_party/aiter/ on first use and checked out to the
+# manifest's [qola] aiter_commit; --aiter-root is optional.
 qola build \
   --manifest example/te-manifest.toml \
-  --aiter-root 3rdparty/aiter \
   --output-dir /tmp/qola-out
 
 # Build in cpp_itfs mode (no PyTorch dependency)
 qola build \
   --manifest example/te-manifest.toml \
-  --aiter-root 3rdparty/aiter \
   --output-dir /tmp/qola-out \
   --mode cpp_itfs
 ```
 
-### CLI Options
+#### `qola build` options
 
 | Option | Description |
 |---|---|
 | `--manifest` | Path to the TOML manifest file |
-| `--aiter-root` | Path to the AITER source tree |
+| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/build/third_party/aiter`, cloned on demand) |
+| `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest's `[qola] aiter_commit`) |
+| `--patches-dir` | Directory of `*.patch` files applied on top of the AITER checkout (overrides manifest's `[qola] patches_dir`; defaults to `<QoLA repo>/patches/aiter`) |
 | `--output-dir` | Directory for build artifacts |
 | `--arch` | Target GPU architecture (repeatable, e.g. `--arch gfx950`) |
 | `--mode` | Build mode: `pybind` (default) or `cpp_itfs` |
 | `--verbose` | Enable verbose build output |
+
+### `qola checkout` — prepare an AITER source tree without building
+
+Runs only the AITER-prep phase of `qola build`: clones (if needed), fetches and checks out the requested commit, force-syncs submodules, and applies `patches/aiter/*.patch`. Useful when downstream consumers want a patched AITER source tree to inspect, run their own builds against, or feed into another tool.
+
+```bash
+# Manifest-driven: pin the commit + patches via [qola] in the manifest
+qola checkout --manifest example/te-manifest.toml
+
+# Explicit overrides without a manifest
+qola checkout --aiter-commit d32b0cb62 --patches-dir patches/aiter
+
+# Re-apply patches to whatever is currently checked out
+# (only valid if build/third_party/aiter/ already exists)
+qola checkout
+```
+
+Prints `AITER ready at <abs-path>` on success. Hard-fails on patch conflict — same `git apply --3way` semantics as `qola build`.
+
+#### `qola checkout` options
+
+| Option | Description |
+|---|---|
+| `--manifest` | *Optional.* TOML manifest; `[qola] aiter_commit` and `[qola] patches_dir` are read as fallbacks for the corresponding flags |
+| `--aiter-root` | Path to the AITER source tree (default: `<QoLA repo>/build/third_party/aiter`, cloned on demand) |
+| `--aiter-commit` | AITER SHA / tag / branch to fetch and checkout (overrides manifest) |
+| `--patches-dir` | Directory of `*.patch` files (overrides manifest; defaults to `<QoLA repo>/patches/aiter`; point at an empty dir to skip patching) |
+
+The same logic is exposed for programmatic use:
+
+```python
+from qola.build_tools import checkout_aiter
+
+aiter_root = checkout_aiter(manifest_path="example/te-manifest.toml")
+# aiter_root is now an absolute path to a clean, patched AITER checkout
+```
+
+`qola build` itself routes through `checkout_aiter`, so the two commands are guaranteed to produce identical AITER trees from identical inputs.
 
 ## Manifest Format
 
@@ -63,6 +106,7 @@ The manifest is a TOML file that declares what to build. See [`example/te-manife
 [qola]
 aiter_commit = "33f2e6a..."   # Pinned AITER commit
 namespace = "te"               # C++ namespace and .so prefix
+patches_dir = "patches/aiter"  # Optional; overrides the default <QoLA repo>/patches/aiter
 rocm_versions = ["7.2"]
 
 [build]
