@@ -1,61 +1,70 @@
 Subject: HSA-only path in aiter_hip_common.h (require + use embedded blobs)
 
+QoLA always builds AITER with -DAITER_EMBEDDED_HSA_HEADER and embeds the
+.co blobs directly into the binary. Strip the AITER_ASM_DIR runtime
+fallback from AiterAsmKernel::load_hsaco_file so a stray env var cannot
+make a QoLA-built consumer silently load .co files from disk; refuse to
+compile if the embedded macros are missing.
+
 diff --git a/csrc/include/aiter_hip_common.h b/csrc/include/aiter_hip_common.h
-index bbe5eb89d..04ec32bac 100644
+index 7790e3d97..c2a3264bc 100644
 --- a/csrc/include/aiter_hip_common.h
 +++ b/csrc/include/aiter_hip_common.h
-@@ -72,30 +72,27 @@ struct AiterAsmKernelArgs
- 
- static const std::string get_gpu_arch();
- 
-+// ASM kernel loading requires embedded HSA blobs (provided by QoLA at
-+// build time via -DAITER_EMBEDDED_HSA_HEADER).  Consumers that only need
-+// type definitions (e.g. aiter::mha_fwd_args) can include this header
-+// without the embedded blobs.
-+#ifdef AITER_EMBEDDED_HSA_HEADER
-+
- inline void load_asm_kernel(const char* name,
-                             const char* hsaco,
-                             hipModule_t& module,
-                             hipFunction_t& kernel_func)
- {
--    const char* AITER_ASM_DIR = std::getenv("AITER_ASM_DIR");
--    std::string arch_name     = get_gpu_arch();
--    if(AITER_ASM_DIR != nullptr)
--    {
--        std::string hsa_path = std::string(AITER_ASM_DIR) + "/" + arch_name + "/" + hsaco;
--        AITER_LOG_INFO("hipModuleLoad: " << hsa_path << " GetFunction: " << name);
--        HIP_CALL(hipModuleLoad(&module, hsa_path.c_str()));
--    }
--    else
--    {
+@@ -330,44 +330,22 @@ class AiterAsmKernel: private AiterAsmKernelFast
+         }
+     }
+
++    // ASM kernel loading requires embedded HSA blobs (provided by QoLA at
++    // build time via -DAITER_EMBEDDED_HSA_HEADER).  The on-disk AITER_ASM_DIR
++    // path is intentionally disabled so QoLA-built consumers cannot silently
++    // fall back to loading .co files from a runtime env var.
+     const void* load_hsaco_file(const char* kernel_name, const char* hsaco_path)
+     {
+-        const char* AITER_ASM_DIR = std::getenv("AITER_ASM_DIR");
+-        std::string arch_name     = get_gpu_arch();
+-        if(AITER_ASM_DIR != nullptr)
+-        {
+-            std::string full_path = std::string(AITER_ASM_DIR) + "/" + arch_name + "/" + hsaco_path;
+-            AITER_LOG_INFO("LoadKernel: " << kernel_name << " hsaco: " << full_path);
+-
+-            std::ifstream file(full_path, std::ios::binary | std::ios::ate);
+-
+-            AITER_CHECK(file.is_open(), "failed to open ", full_path.c_str());
+-
+-            size_t file_size = file.tellg();
+-            hsaco_data.reset(new char[file_size]);
+-
+-            file.seekg(0, std::ios::beg);
+-            AITER_CHECK(
+-                file.read(hsaco_data.get(), file_size), "failed to read ", full_path.c_str());
+-
+-            validate_hsaco_lds(kernel_name, full_path, hsaco_data.get(), file_size);
+-
+-            return hsaco_data.get();
+-        }
+-        else
+-        {
 -#if defined(AITER_EMBEDDED_HSA_HEADER) && defined(AITER_EMBEDDED_HSA_MAP)
--        std::string fname = "hsa/" + arch_name + "/" + hsaco;
--        auto hasco_obj    = AITER_EMBEDDED_HSA_MAP.find(fname);
--        CHECK_COND(hasco_obj != AITER_EMBEDDED_HSA_MAP.end());
--        CHECK_COND(hasco_obj->second.data() != nullptr);
--        AITER_LOG_INFO("hipModuleLoad: " << fname << " GetFunction: " << name);
--        HIP_CALL(hipModuleLoadData(&module, hasco_obj->second.data()));
-+#if !defined(AITER_EMBEDDED_HSA_MAP)
-+#error "AITER_EMBEDDED_HSA_HEADER is defined but AITER_EMBEDDED_HSA_MAP is missing."
+-            std::string fname = "hsa/" + arch_name + "/" + hsaco_path;
+-            auto hasco_obj    = AITER_EMBEDDED_HSA_MAP.find(fname);
+-            AITER_CHECK(hasco_obj != AITER_EMBEDDED_HSA_MAP.end(), "hasco_obj not found");
+-            AITER_CHECK(hasco_obj->second.data() != nullptr, "hasco_obj is nullptr");
+-            AITER_LOG_INFO("LoadKernel: " << kernel_name << " hsaco: [embedded] " << fname);
+-            return hasco_obj->second.data();
+-#else
+-            AITER_CHECK(AITER_ASM_DIR != nullptr, "AITER_ASM_DIR not set");
+-            return nullptr;
++#if !defined(AITER_EMBEDDED_HSA_HEADER) || !defined(AITER_EMBEDDED_HSA_MAP)
++#error "QoLA build requires AITER_EMBEDDED_HSA_HEADER and AITER_EMBEDDED_HSA_MAP."
  #endif
--    }
-+    std::string arch_name = get_gpu_arch();
-+    std::string fname = "hsa/" + arch_name + "/" + hsaco;
-+    auto it = AITER_EMBEDDED_HSA_MAP.find(fname);
-+    CHECK_COND(it != AITER_EMBEDDED_HSA_MAP.end());
-+    CHECK_COND(it->second.data() != nullptr);
-+    AITER_LOG_INFO("hipModuleLoad (embedded): " << fname << " GetFunction: " << name);
-+    HIP_CALL(hipModuleLoadData(&module, it->second.data()));
-     HIP_CALL(hipModuleGetFunction(&kernel_func, module, name));
-     AITER_LOG_INFO("hipModuleGetFunction: " << name << " Success");
- }
-@@ -174,6 +171,8 @@ class AiterAsmKernelFast
-     };
- };
- 
-+#endif // AITER_EMBEDDED_HSA_HEADER
-+
- static const std::string get_gpu_arch()
- {
-     int device_count;
+-        }
++        std::string arch_name = get_gpu_arch();
++        std::string fname     = "hsa/" + arch_name + "/" + hsaco_path;
++        auto hasco_obj        = AITER_EMBEDDED_HSA_MAP.find(fname);
++        AITER_CHECK(hasco_obj != AITER_EMBEDDED_HSA_MAP.end(), "hasco_obj not found");
++        AITER_CHECK(hasco_obj->second.data() != nullptr, "hasco_obj is nullptr");
++        AITER_LOG_INFO("LoadKernel: " << kernel_name << " hsaco: [embedded] " << fname);
++        return hasco_obj->second.data();
+     }
+
+     public:
