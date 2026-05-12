@@ -160,7 +160,7 @@ def load_manifest(
             _drop_blob_directions(spec, drop_directions)
 
         if mod_mode == "cpp_itfs":
-            _apply_cpp_itfs(spec, name, namespace)
+            _apply_cpp_itfs(spec, name, namespace, eval_globals)
         else:
             # For pybind mode, hsa_subdirs comes from the manifest entry,
             # falling back to the registry (which is authoritative for the
@@ -215,7 +215,12 @@ def _write_qola_config_header(namespace: str) -> None:
         f.write(content)
 
 
-def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> None:
+def _apply_cpp_itfs(
+    spec: BuildSpec,
+    module_name: str,
+    namespace: str = "",
+    eval_globals: Optional[dict[str, Any]] = None,
+) -> None:
     """Rewrite *spec* for torch-free cpp_itfs mode.
 
     Drops pybind source files and replaces them with QoLA's cpp_itfs
@@ -226,6 +231,9 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
     ``-D`` flag.  This avoids changing compile commands for the thousands
     of CK variant source files (which never reference the macro), letting
     ninja skip their recompilation when only the namespace changes.
+
+    *eval_globals* supplies AITER path constants (``AITER_META_DIR`` etc.)
+    used to ``str.format`` the registry's ``add_blob_gen_cmd`` entries.
     """
     src_map = _load_cpp_itfs_src_map()
     mapping = src_map.get(module_name)
@@ -248,6 +256,33 @@ def _apply_cpp_itfs(spec: BuildSpec, module_name: str, namespace: str = "") -> N
         os.path.join(_QOLA_ROOT, inc) for inc in mapping.get("add_includes", [])
     ]
     spec.extra_include = new_includes + spec.extra_include
+
+    # Append cpp_itfs-mode flags (literal strings, no eval).
+    spec.flags_extra_hip = list(spec.flags_extra_hip) + list(
+        mapping.get("add_flags_extra_hip", [])
+    )
+    spec.flags_extra_cc = list(spec.flags_extra_cc) + list(
+        mapping.get("add_flags_extra_cc", [])
+    )
+
+    # Append cpp_itfs-mode blob_gen_cmd entries.  Registry strings use
+    # ``str.format`` substitution against the AITER eval namespace; the
+    # ``{{}}`` escape becomes the literal ``{}`` placeholder that core.py
+    # later substitutes with the per-module blob output directory.
+    extra_blobs = mapping.get("add_blob_gen_cmd", [])
+    if extra_blobs:
+        if eval_globals is None:
+            raise ValueError(
+                f"Module '{module_name}' has add_blob_gen_cmd entries but "
+                "eval_globals was not provided to _apply_cpp_itfs."
+            )
+        formatted = [cmd.format(**eval_globals) for cmd in extra_blobs]
+        if isinstance(spec.blob_gen_cmd, list):
+            spec.blob_gen_cmd = list(spec.blob_gen_cmd) + formatted
+        elif spec.blob_gen_cmd:
+            spec.blob_gen_cmd = [spec.blob_gen_cmd] + formatted
+        else:
+            spec.blob_gen_cmd = formatted
 
     # Write namespace config into cpp_itfs/ so only the wrapper files see it.
     _write_qola_config_header(namespace)
